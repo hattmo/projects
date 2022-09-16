@@ -1,0 +1,23 @@
+{
+    "version": "1.0.0",
+    "author": "hattmo",
+    "license": "GPL-3.0-or-later",
+    "name": "@hattmo/canvasapi",
+    "description": "Easy access to the Canvas API",
+    "scripts": {
+        "test": "mocha -r ts-node/register --bail ./test/**/*Test.ts",
+        "build": "tsc --watch --project .",
+        "prepare": "tsc --project ."
+    },
+    "main": "./dist/index.js",
+    "devDependencies": {
+        "@types/chai": "^4.2.22",
+        "@types/mocha": "^9.0.0",
+        "@types/node": "^16.11.11",
+        "chai": "^4.3.4",
+        "mocha": "^9.1.3",
+        "ts-node": "^10.4.0",
+        "tslint": "^5.20.1",
+        "typescript": "^4.5.2"
+    }
+}

@@ -10,10 +10,7 @@ keywords = ["security", "cobaltstrike"]
 license = "GPL-3.0-or-later"
 name = "covert_client"
 repository = "https://github.com/hattmo/covert_c2"
-version = "0.1.4"
-
-[dependencies]
-anyhow = "1.0"
+version = "0.1.5"
 
 [dependencies.windows]
 features = [

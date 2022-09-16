@@ -1,8 +1,7 @@
 /.vscode
 /.cargo
 /target
-/dst
-/vendor
 /out
-/package
-/package.tar.gz
+/doc
+dist
+covert_c2_ping.tar.gz

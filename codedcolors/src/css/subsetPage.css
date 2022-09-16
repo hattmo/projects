@@ -1,0 +1,54 @@
+.subsetPage {
+  display: grid;
+  grid-template-areas: 'header header' 'subsetA subsetB' 'subsetC subsetD' 'message message';
+}
+
+.subsetPageHeader {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 50px;
+  text-align: center;
+  grid-area: header;
+  background: lightblue;
+  margin: 5px;
+  border: 2px;
+  border: solid;
+  display: grid;
+}
+
+.subsetPageSubset {
+  background: lightblue;
+  margin: 5px;
+  border: 2px;
+  border: solid;
+  display: grid;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.win {
+  background: lightgreen !important;
+}
+.subsetPageTitle {
+  font-family: 'Times New Roman', Times, serif;
+  margin: 0px;
+  font-size: 40px;
+  text-align: center;
+}
+
+.subsetpageResultMessage {
+  font-family: 'Times New Roman', Times, serif;
+  margin: 0px;
+  font-size: 40px;
+  text-align: center;
+  background: lightblue;
+  margin: 5px;
+  border: 2px;
+  border: solid;
+  grid-area: message
+}
+
+.winMessage {
+  border-radius: 25px;
+  padding: 2px;
+  box-shadow: inset 0 0 5px #000000;
+}

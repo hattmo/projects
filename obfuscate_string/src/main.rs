@@ -8,15 +8,12 @@ use tree_sitter_traversal::Order;
 
 use clap::Parser as ClapParser;
 
-/// Simple program to greet a person
 #[derive(ClapParser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
     #[clap(value_parser)]
     input: String,
 
-    /// Number of times to greet
     #[clap(value_parser)]
     output: String,
 }
@@ -264,7 +261,7 @@ mod test {
 
     #[test]
     fn test_hex() {
-        let foo: u8 = "ff".parse().unwrap();
+        let foo = u8::from_str_radix("ff", 16).unwrap();
         println!("{}", foo);
     }
     #[test]

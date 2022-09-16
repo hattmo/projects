@@ -1,0 +1,3 @@
+[submodule "obfuscate_string/tree-sitter-c"]
+	path = obfuscate_string/tree-sitter-c
+	url = git@github.com:tree-sitter/tree-sitter-c.git
