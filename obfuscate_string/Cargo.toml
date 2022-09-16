@@ -1,0 +1,22 @@
+[package]
+authors = ["Matthew \"Oscar\" Howard"]
+description = "Rewrites c files to remove string literals"
+edition = "2021"
+homepage = "https://github.com/hattmo/simple_string_obfuscator"
+license = "MIT OR Apache-2.0"
+name = "simple_string_obfuscator"
+publish = false
+readme = "./Readme"
+repository = "https://github.com/hattmo/simple_string_obfuscator"
+version = "0.1.0"
+
+
+[dependencies]
+anyhow = "1.0"
+clap = {version = "3.2", features = ["derive"]}
+rand = "0.8"
+tree-sitter = "0.20"
+tree-sitter-traversal = "0.1.2"
+
+[build-dependencies]
+cc = "*"

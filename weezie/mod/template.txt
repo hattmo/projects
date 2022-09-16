@@ -1,0 +1,22 @@
+#define MODULE_UUID 1
+
+#include <weezie.h>
+
+EVENT_HANDLER(evt_handler)
+{
+
+}
+
+FUNCTION_HANDLER(fn)
+{
+
+}
+MODLULE_LOAD(load)
+{
+
+}
+
+MODULE_INIT()
+{
+    register_module(load, fn);
+}
