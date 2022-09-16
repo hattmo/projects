@@ -1,5 +1,2 @@
-node_modules/
-/dst/
-/static/
-/coverage/
-/factorio*
+/factorio
+/target

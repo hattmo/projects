@@ -1,2 +1,0 @@
-[workspace]
-members = ["covert_c2_ping_server","covert_c2_ping_client","covert_c2_ping_common"]

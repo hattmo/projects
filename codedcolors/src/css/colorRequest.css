@@ -1,0 +1,48 @@
+.colorRequest {
+  display: grid;
+  grid-template-areas: 'header header' 'subsetA subsetB' 'subsetC subsetD' 'submit submit';
+}
+
+.colorRequestHeader {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 50px;
+  text-align: center;
+  grid-area: header;
+  background: lightblue;
+  margin: 5px;
+  border: 2px;
+  border: solid;
+  display: grid;
+}
+
+.colorRequestSubmit {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 50px;
+  text-align: center;
+  grid-area: submit;
+  background: lightblue;
+  margin: 5px;
+  border: 2px;
+  border: solid;
+  display: grid;
+  cursor: pointer;
+  border-radius: 25px;
+  padding: 2px;
+  box-shadow: inset 0 0 5px #000000;
+}
+
+.colorRequestSubset {
+  background: lightblue;
+  margin: 5px;
+  border: 2px;
+  border: solid;
+  display: grid;
+  justify-content: center;
+}
+
+.colorRequestSubsetTitle {
+  font-family: 'Times New Roman', Times, serif;
+  margin: 0px;
+  font-size: 40px;
+  text-align: center;
+}

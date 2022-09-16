@@ -1,0 +1,2 @@
+[workspace]
+members = ["aiexec_be", "aiexec_fe"]
