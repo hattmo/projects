@@ -1,0 +1,5 @@
+reg(0,w,0).
+reg(0,x,0).
+reg(0,y,0).
+reg(0,z,0).
+reg(1,w,V):-reg(0,w,V)

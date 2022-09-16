@@ -1,0 +1,10 @@
+[package]
+edition = "2021"
+name = "aoc_2022"
+version = "0.1.0"
+
+[dependencies]
+helper = {path = "../helper"}
+itertools = "0.10.5"
+regex = "1.7.0"
+trees = "0.4.2"

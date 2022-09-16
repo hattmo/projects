@@ -1,0 +1,8 @@
+[package]
+edition = "2021"
+name = "aoc_2016"
+version = "0.1.0"
+
+[dependencies]
+helper = {path="../helper"}
+md5 = "0.7.0"

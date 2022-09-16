@@ -1,0 +1,5 @@
+__pycache__
+/.vscode
+*.class
+*.java
+/.pytest_cache

@@ -1,0 +1,71 @@
+.master {
+  display: grid;
+  grid-template-areas: 'one two three four' 'check check check check';
+}
+
+.masterSubset {
+  display: grid;
+  grid-template-areas: 'title title title' 'subset subset subset' 'left rotate right';
+  background: lightblue;
+  border-style: solid;
+  border-width: 2px;
+  margin: 5px;
+}
+
+.masterSubsetTitle {
+  justify-self: center;
+  grid-area: title;
+  font-size: 40px;
+  margin: 0;
+}
+
+.masterRow {
+  grid-area: subset;
+  width: 312px;
+  height: 78px;
+  margin: 5px;
+  grid-template-columns: auto auto auto auto;
+  display: grid;
+  border-style: solid;
+  border-width: 2px;
+}
+
+.masterButtons {
+  justify-self: center;
+  font-size: 40px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.masterCheck {
+  font-family: 'Times New Roman', Times, serif;
+  margin: 0px;
+  font-size: 40px;
+  text-align: center;
+  background: lightblue;
+  margin: 5px;
+  border: 2px;
+  border: solid;
+  justify-self: center;
+  grid-area: check;
+  cursor: pointer;
+  border-radius: 25px;
+  padding: 5px;
+  box-shadow: inset 0 0 5px #000000;
+}
+
+.one {
+  grid-area: one;
+}
+
+.two {
+  grid-area: two;
+}
+
+.three {
+  grid-area: three;
+}
+
+.four {
+  grid-area: four;
+}

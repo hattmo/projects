@@ -1,0 +1,32 @@
+.results {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 30px;
+  text-align: center;
+  grid-area: header;
+  background: lightblue;
+  border: 2px;
+  border: solid;
+  display: grid;
+  grid-template-areas: 'title' 'time' 'events';
+}
+
+.resultsTitle {
+  grid-area: title;
+  margin: 5px;
+}
+
+.resultsTime {
+  grid-area: time;
+  margin: 5px;
+}
+
+.resultEvents {
+  grid-area: events;
+}
+
+.resultEvent {
+  text-align: left;
+  margin: 5px;
+  font-size: 12pt;
+  left: 0px;
+}

@@ -1,0 +1,6 @@
+[workspace]
+members = ["xss_server"]
+
+[profile.release]
+lto = true
+opt-level = "z"

@@ -1,0 +1,13 @@
+language: node_js
+node_js:
+  - stable
+deploy:
+  provider: npm
+  email: matthew@hattmo.com
+  api_key:
+    secure: KCJvYJBgp1yzpnuceI3xBo2VNAlc7zs5jML85dVTu8cOVE97olk/GmceplZBpllrDy4dFwhqwlvk4HtdgMErG8IdZC9/bv1Oi08DtQik3LmaoSToO8Y2e716GhJmiO4SKWvRfdzXvmZRHqQMZyLKqmdaISzQh98UJ/xSR5GViRvMQ24rJGqgzLIVV5yWzWbN5+F278LKk53XEBp189DxZVY+d95g+p/1F35xfR5oYrkvcoRm9dEmxXt9lCybbY9p5b0Hc/lff2tD81UMcEv+L5dTEGvxLB+ah4cD90gVZgEY9xlYc7QX1yRfJSTPtUaSEfLhtPjcW13Tpl25ubIKfFS5C06ilS6nFBiOQ1C8f8NJdi7+ptCotZiWgGVWb/DjksDHOvpIqBrUCdmGAVmlTMH0AnytPhKl74FZpD/N9sPoqELHhkVYgVE4n2pm78PjW5W4tAt4HvWeNk9oaE4525z2nEeKIq7f6PtoUtNHveXrXgdde1cGm8nhqzXRI5lxUBEupwZBHrf1it4Fnyg2F85hrumfEPvt8mgF0LigoHr1SCz5/NRy45el70D36IKupm6Dqvjpq3LSzwygDJNgelILCyteJOfvBuR8n12qxZn710eeKQgko7N3RQO2PVZZyuLwNsiYxFjx/f7p0oo33NOSp0aObOFgq881ZY+sV7c=
+  on:
+    branch: master
+    skip_cleanup: true
+    tags: true
+    repo: hattmo/ajvmiddleware
