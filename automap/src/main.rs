@@ -1,4 +1,3 @@
-#![feature(io_error_other)]
 #![feature(lazy_cell)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::nursery)]
@@ -16,7 +15,6 @@ use scan_result::ScanResult;
 use std::{
     env,
     io::{self, Error, ErrorKind, Result},
-    string::ToString,
     sync::LazyLock,
 };
 use tokio::{fs::read, process::Command, sync::RwLock};

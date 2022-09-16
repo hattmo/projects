@@ -1,8 +1,0 @@
-**
-!/nginx.conf
-!/envConfig.sh
-!/tsconfig.json
-!/webpack.config.js
-!/package.json
-!/package-lock.json
-!/src/

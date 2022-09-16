@@ -91,6 +91,7 @@ fn consumer(
         let buffer = rx.lock().unwrap().recv().or(Err(ThreadDone))?;
         let buf = &buffer.data[..buffer.len];
         for line in buf.lines() {
+            let line = line.unwrap();
             temp_city.fill(0);
             let (city, temp) = line.split_once(';').ok_or(ThreadDone)?;
             temp_city[..city.len()].copy_from_slice(city.as_bytes());

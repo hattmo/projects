@@ -1,5 +1,4 @@
 mod instructions;
-
 use instructions::{basic, control_flow, integer_arithmetic};
 
 #[derive(Debug, Copy, Clone)]

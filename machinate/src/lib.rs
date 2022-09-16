@@ -48,16 +48,14 @@ impl Environment {
                 session.handshake().unwrap();
                 match conn_info.creds {
                     Cred::Password(ref password) => {
-                        session
-                            .userauth_password(&conn_info.user, &password)
-                            .unwrap();
+                        session.userauth_password(conn_info.user, password).unwrap();
                     }
                     Cred::PubKey(ref key) => {
                         session
                             .userauth_pubkey_file(
-                                &conn_info.user,
+                                conn_info.user,
                                 key.pubkey,
-                                &key.privkey,
+                                key.privkey,
                                 key.passphrase,
                             )
                             .unwrap();
