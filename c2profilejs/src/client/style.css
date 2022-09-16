@@ -1,0 +1,65 @@
+* {
+    font-family: Futura;
+    font-size: 15pt
+}
+
+h2 {
+    font-size: 30pt;
+    margin: 0px;
+}
+
+body {
+    margin: 0;
+}
+
+button {
+    border-style: solid;
+    border-width: 1px;
+    border-color: black;
+    border-radius: 5px;
+    padding: 3px;
+}
+
+input {
+    padding-left: 10px;
+    border-style: solid;
+    border-width: 0px;
+    border-bottom-width: 2px;
+}
+
+select {
+    border-radius: 5px;
+    border-color: black;
+    border: 1px;
+    border-style: solid;
+}
+
+a.navLink {
+    place-items: center center;
+    display: grid;
+    border: 3px solid black;
+    border-radius: 5px;
+    background-color: black;
+    text-decoration: none;
+    color: white;
+}
+
+a.navLink.active {
+    background-color: grey;
+}
+
+.badInput {
+    background-color: lightcoral
+}
+
+.goodInput {
+    background-color: lightgreen
+}
+
+.badInput:focus {
+    background-color: lightcoral
+}
+
+.goodInput:focus {
+    background-color: lightgreen
+}

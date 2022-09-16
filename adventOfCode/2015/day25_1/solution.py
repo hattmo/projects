@@ -8,7 +8,7 @@ target_col = 3019
 while not (row == target_row and col == target_col):
     current = (current * 252533) % 33554393
     if row == 1:
-        row = col+1
+        row = col + 1
         col = 1
     else:
         row -= 1

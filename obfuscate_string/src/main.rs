@@ -1,22 +1,18 @@
 extern "C" {
     fn tree_sitter_c() -> Language;
 }
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Ok, Result};
+use clap::Parser as ClapParser;
 use std::fs::{read, write};
 use tree_sitter::{Language, Parser};
 use tree_sitter_traversal::Order;
 
-use clap::Parser as ClapParser;
-
-/// Simple program to greet a person
 #[derive(ClapParser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
     #[clap(value_parser)]
     input: String,
 
-    /// Number of times to greet
     #[clap(value_parser)]
     output: String,
 }
@@ -98,9 +94,9 @@ impl StringStore {
         let start = self.blob1.len();
         let end = start + in_string.len() + 1;
         let index = self.count;
-        let _ = transform_escape(in_string);
+        let in_string = transform_escape(in_string).unwrap().1;
         self.count += 1;
-        for c in in_string {
+        for ref c in in_string {
             let key: u8 = rand::random();
             self.blob1.push(key);
             self.blob2.push(key ^ c);
@@ -159,112 +155,59 @@ static char *lookup(int index, int start, int end)
     }
 }
 
-#[derive(Clone, Copy)]
-enum EscapeState {
-    Base,
-    Escape,
-    Hex,
-}
-use std::str::from_utf8;
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, take},
+    combinator::{all_consuming, map, map_res, value},
+    multi::many0,
+    sequence::preceded,
+    IResult,
+};
 
-fn transform_escape(in_string: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    let mut hex_val = Vec::new();
-    let mut escape_state = EscapeState::Base;
-    for c in in_string {
-        match (escape_state, c) {
-            //Start escape
-            (EscapeState::Base, 0x5c) => {
-                escape_state = EscapeState::Escape;
-            }
-            (EscapeState::Hex, 0x5c) => {
-                let _: u8 = from_utf8(&hex_val).unwrap().parse().unwrap();
-                escape_state = EscapeState::Escape;
-            }
-
-            //Basic escapes
-            (EscapeState::Escape, 0x61) => {
-                out.push(0x07);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x62) => {
-                out.push(0x08);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x65) => {
-                out.push(0x1b);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x66) => {
-                out.push(0x0c);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x6e) => {
-                out.push(0x0a);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x72) => {
-                out.push(0x0d);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x74) => {
-                out.push(0x09);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x76) => {
-                out.push(0x0b);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x5c) => {
-                out.push(0x5c);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x27) => {
-                out.push(0x27);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x22) => {
-                out.push(0x22);
-                escape_state = EscapeState::Base;
-            }
-            (EscapeState::Escape, 0x3f) => {
-                out.push(0x3f);
-                escape_state = EscapeState::Base;
-            }
-
-            (EscapeState::Escape, 0x78) => {
-                escape_state = EscapeState::Hex;
-            }
-
-            (EscapeState::Hex, c) if (0x30..0x39).contains(c) || (0x61..0x7a).contains(c) => {
-                hex_val.push(*c);
-            }
-
-            // Not an escape sequence
-            (EscapeState::Escape, _) => {
-                panic!("Invalid escape sequence");
-            }
-
-            (EscapeState::Hex, c) => {
-                escape_state = EscapeState::Base;
-                out.push(c.clone());
-            }
-            // Just regular text
-            (EscapeState::Base, c) => {
-                out.push(c.clone());
-            }
-        }
-    }
-    return out;
+fn transform_escape(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
+    all_consuming(many0(alt((
+        preceded(
+            tag(b"\\"),
+            alt((
+                value(0x07, tag(b"a")),
+                value(0x08, tag(b"b")),
+                value(0x1b, tag(b"e")),
+                value(0x0c, tag(b"f")),
+                value(b'\n', tag(b"n")),
+                value(b'\r', tag(b"r")),
+                value(b'\t', tag(b"t")),
+                value(0x0b, tag(b"v")),
+                value(b'\\', tag(b"\\")),
+                value(b'\'', tag(b"'")),
+                value(b'"', tag(b"\"")),
+                map_res(preceded(tag(b"x"), take(2usize)), |hex: &[u8]| {
+                    u8::from_str_radix(
+                        &String::from_utf8(hex.to_vec()).or(Err(anyhow!("Not utf8")))?,
+                        16,
+                    )
+                    .or(Err(anyhow!("Not u8 byte")))
+                }),
+            )),
+        ),
+        map(take(1usize), |foo: &[u8]| foo[0]),
+    ))))(input)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::StringStore;
+    use crate::{transform_escape, StringStore};
+
+    #[test]
+    fn test_parse() {
+        let foo = b"\\x77\\b";
+        let (_, parsed) = transform_escape(foo).unwrap();
+        println!("{}", String::from_utf8(foo.to_vec()).unwrap());
+        println!("{}", String::from_utf8(parsed).unwrap());
+    }
 
     #[test]
     fn test_hex() {
-        let foo: u8 = "ff".parse().unwrap();
+        let foo = u8::from_str_radix("ff", 16).unwrap();
         println!("{}", foo);
     }
     #[test]

@@ -1,0 +1,16 @@
+cargo-features = ["profile-rustflags"]
+
+[package]
+edition = "2021"
+name = "test_no_std"
+version = "0.1.0"
+
+[profile.dev]
+panic = "abort"
+rustflags = ["-C", "target-cpu=native", "-C", "link-args=-nostartfiles", "-C", "link-args=-Wl,-n,-N,--no-dynamic-linker,--build-id=none"]
+
+[profile.release]
+panic = "abort"
+rustflags = ["-C", "target-cpu=native", "-C", "link-args=-nostartfiles", "-C", "link-args=-Wl,-n,-N,--no-dynamic-linker,--build-id=none"]
+
+[dependencies]

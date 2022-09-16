@@ -1,0 +1,14 @@
+language: node_js
+node_js: '10'
+cache:
+  directories:
+  - node_modules
+deploy:
+  provider: npm
+  skip_cleanup: true
+  email: matthew@hattmo.com
+  api_key:
+    secure: cwhJrewriRIdv1V28/DX4x+xp7SFct0QLE8ZFUWKJLEhV0AwhT8VJ1M4PyGb7IPMyCbqmjP+iZkdvLM/9GkWyreyvKRniB9G3D70XzuAnyGvj2Be7ZYPp3wWCnbzp4CvSq2xHio4cM352eYT0ZnjX+UTafV6EQKSv7ZZf70bVWXLR3dw+UniFYSSlEwNwFQFjgpw/c33vID5zv4g+4Z74Fb3RRRDJsxhyUfrK5XuCst4qdDpHmpruKs7+6ZbjYHdxnbxe7Kt63GkabbB0mV/RziMZslzTbmgni4gRaRd6VYl3u9KNKQzfXknW4pVwHcvWGgPLU4Qdwl7TaZSPZe7aWKDe7HJGj/N05nAwGDiiFpz1lNyxX5AwJwpZ+OCsYmvICejjT2TYZaBb1jceg5kC2pIXcrKIj3on2ybO32apgW1JPABLC+mEO+s9p2D3bImT9+s7qaYwMBdyLw6Y8z54woF6MxIj6SlPhzRg2bkiWruMypW2GPnbj+ZAX8rnrmsJny+LcEgQzIjRpPWvpZlE8BgSKALKPmoA/zyASfy+vOO8ulOjUm0fLnQ3mT7UoyYNviTq5zsG5FTcmIMRhMALxJaSDsffY+lQ/97IWJAPidY2DESQtwMcgWHWRkoMKUOpAR469/i5YF6XT6YHLnqS8GUbK2oLnLLDGDI0EoozyI=
+  on:
+    tags: true
+    repo: hattmo/assetloader

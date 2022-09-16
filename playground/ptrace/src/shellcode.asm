@@ -1,0 +1,13 @@
+BITS 64
+
+
+mov rax, 0x09
+mov rdi, 0x00
+mov rsi, 0x1000
+mov rdx, 0x05
+mov r10, 0x22
+mov r8, 0x00
+mov r9, 0x00
+syscall
+mov rax, 0x22
+syscall
