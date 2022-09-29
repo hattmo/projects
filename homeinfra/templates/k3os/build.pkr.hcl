@@ -47,7 +47,7 @@ source "vsphere-iso" "k3os" {
   password            = ""
   datacenter          = "Datacenter"
   vm_name             = "k3os"
-  folder              = "tmp"
+  folder              = "templates"
   host                = "esxi1.hattmo.com"
   datastore           = "datastore1"
   convert_to_template = false
