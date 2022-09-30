@@ -9,16 +9,15 @@ name = "covert_c2_ping_server"
 version = "0.1.1"
 
 [dependencies]
-anyhow = "1.0"
-bincode_aes = "1.0"
-clap = {version = "3.2", features = ["derive"]}
+anyhow = "1"
+clap = {version = "4", features = ["derive"]}
 covert_c2_ping_common = {path = "../covert_c2_ping_common"}
 covert_common = "0.1"
 covert_server = "0.1"
-lazy_static = "1.4"
+lazy_static = "1"
 nfq = "0.2"
 pnet_datalink = "0.31"
 pnet_packet = "0.31"
-tokio = {features = ["full"], version = "1.20"}
+tokio = {features = ["full"], version = "1"}
 tracing = "0.1"
 tracing-subscriber = "0.3"
