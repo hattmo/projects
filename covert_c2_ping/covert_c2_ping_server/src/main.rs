@@ -1,8 +1,8 @@
 #![feature(slice_range)]
 #![feature(never_type)]
 mod nft;
-
 mod worker;
+mod web;
 use anyhow::{bail, Result};
 
 use crate::nft::NftRules;
@@ -67,10 +67,15 @@ async fn entry() -> Result<()> {
     tracing::info!("Interface: {}", conf.i);
     tracing::info!("Key: {:02X?}", *KEY);
     tracing::info!("Starting...");
+
+    let web_h = task::spawn(web::web_worker());
+    web_h.await?;
+
     let rules = NftRules::new().or_else(|err| {
         tracing::info!("{:?}", err);
         bail!("Failed to make rules");
     })?;
+
     let sig_h = task::spawn(
         async move {
             let mut res =
@@ -80,11 +85,15 @@ async fn entry() -> Result<()> {
         }
         .instrument(tracing::span!(Level::INFO, "signal_handle")),
     );
+
     let (downstream_sender, upstream_receiver, recv_h, send_h) = worker::start_workers()?;
 
     let main_h = task::spawn(main_loop(downstream_sender, upstream_receiver));
 
+
+
     select! {
+        // _ = web_h => {}
         _ = recv_h => {}
         _ = send_h => {}
         _ = sig_h => {}
