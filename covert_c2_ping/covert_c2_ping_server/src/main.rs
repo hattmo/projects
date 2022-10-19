@@ -28,11 +28,11 @@ use workers::{
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Config {
-    #[clap(long, value_parser,default_value_t=String::from("localhost"))]
+    #[clap(long, value_parser, default_value_t=String::from("localhost"))]
     ts: String,
-    #[clap(name="interface", long="i", value_parser,default_value_t=String::from("eth0"))]
+    #[clap(name="interface", long="i", value_parser, default_value_t=String::from("eth0"))]
     i: String,
-    #[clap(long, value_parser)]
+    #[clap(long, value_parser, default_value_t=String::from("password"))]
     key: String,
 }
 
@@ -58,6 +58,7 @@ lazy_static! {
 }
 
 fn main() -> Result<()> {
+    
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
@@ -70,6 +71,7 @@ fn main() -> Result<()> {
 async fn entry() -> Result<()> {
     let conf = &(*GLOBAL_CONF);
     tracing_subscriber::fmt::init();
+    tracing::info!("{:?}", std::env::current_dir());
 
     tracing::info!("Team Server: {}", conf.ts);
     tracing::info!("Interface: {}", conf.i);
