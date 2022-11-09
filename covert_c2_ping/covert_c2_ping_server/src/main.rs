@@ -1,3 +1,10 @@
+#![warn(
+    clippy::all,
+    clippy::restriction,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::cargo
+)]
 #![feature(slice_range)]
 #![feature(never_type)]
 mod environment;
@@ -114,11 +121,11 @@ async fn entry() -> Result<()> {
 #[tracing::instrument(skip_all)]
 async fn main_loop(
     downstream_sender: mpsc::UnboundedSender<PingTransaction>,
-    mut upstream_reciever: mpsc::UnboundedReceiver<PingTransaction>,
+    mut upstream_receiver: mpsc::UnboundedReceiver<PingTransaction>,
 ) -> Result<()> {
     loop {
         tracing::info!("Waiting for message");
-        let incoming_ping = match upstream_reciever.recv().await {
+        let incoming_ping = match upstream_receiver.recv().await {
             Some(ping) => ping,
             None => {
                 tracing::info!("Upstream worker closed");
