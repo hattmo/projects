@@ -10,7 +10,7 @@ use std::{
 use tokio::task;
 use warp::{http::Response, Filter, Rejection, Reply};
 
-pub async fn web_worker() -> () {
+pub async fn worker() {
     let patch = warp::patch()
         .and(warp::body::json::<PatchAgent>())
         .and_then(patch_agent);
@@ -40,7 +40,7 @@ async fn post_agent(new_agent: NewAgent) -> Result<impl Reply, Rejection> {
 
     tracing::info!("Got payload len:{}", payload.len());
     let id: u16 = AGENT_COUNT.fetch_add(1, Ordering::SeqCst);
-    task::spawn(session::session_worker(
+    task::spawn(session::worker(
         connection,
         id,
         new_agent.arch.clone(),
@@ -92,7 +92,7 @@ async fn get_agent_list() -> Result<impl Reply, Rejection> {
         .lock()
         .await
         .iter()
-        .map(|(key, (_, val))| (key.clone(), val.clone()))
+        .map(|(key, (_, val))| (*key, val.clone()))
         .collect();
     Ok(warp::reply::json(&sessions))
 }

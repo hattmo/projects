@@ -29,7 +29,7 @@ fn load_conf<'a>() -> Result<ClientConfig<'a>, ()> {
             .or(Err(()))?;
         let deserializer = bincode::options().allow_trailing_bytes();
         let conf = deserializer
-            .deserialize::<'static, ClientConfig>(&mut BUFF[KEY_SIZE..BUF_SIZE])
+            .deserialize::<'static, ClientConfig>(&BUFF[KEY_SIZE..BUF_SIZE])
             .or(Err(()))?;
         Ok(conf)
     }
@@ -79,12 +79,8 @@ fn get_ping_message(
                 }
                 Err(()) //Not ready yet
             });
-        match message {
-            Ok(out) => {
-                // "Got message from upstream";
-                return out;
-            }
-            Err(_) => {}
+        if let Ok(out) = message {
+            return out;
         }
     }
 }
@@ -119,6 +115,6 @@ fn send_ping(addr: [u8; 4], data: Vec<u8>) -> Result<Vec<u8>, ()> {
             replybuffer.reply_data.Data as *const u8,
             replybuffer.reply_data.DataSize.into(),
         );
-        return Ok(response_data.to_vec());
+        Ok(response_data.to_vec())
     }
 }
