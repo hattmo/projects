@@ -1,4 +1,4 @@
-#![deny(clippy::all,clippy::pedantic)]
+#![deny(clippy::all, clippy::pedantic)]
 
 use std::{collections::HashMap, net::Ipv4Addr, time::Duration};
 
@@ -10,6 +10,7 @@ pub enum PingMessage {
     DataMessage(Vec<u8>),
     SleepMessage(Duration),
     CloseMessage,
+    KeyMessage([u8; KEY_SIZE]),
 }
 
 // #[allow(non_camel_case_types)]

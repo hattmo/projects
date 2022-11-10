@@ -38,12 +38,12 @@ pub async fn worker(connection: TcpStream, id: u16, arch: String) {
                                 break;
                             };
                         }
-                        PingMessage::SleepMessage(_) => {
-                            //NOOP
-                        }
                         PingMessage::CloseMessage => {
                             tracing::info!("Close message received");
                             break;
+                        }
+                        _ => {
+                            //NOOP
                         }
                     }
                 }
