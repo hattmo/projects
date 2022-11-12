@@ -1,5 +1,5 @@
 [package]
-name = "java_util"
+name = "java_decompiler"
 version = "0.1.0"
 edition = "2021"
 

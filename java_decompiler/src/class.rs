@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     fmt::Display,
-    io::{Bytes, Read},
+    io::{BufReader, Bytes, Read},
 };
 
 use self::access_flags::{AccessFlags, ACC_PUBLIC};
@@ -22,10 +22,11 @@ pub struct Class {
 
 impl Class {
     pub fn from_reader(mut data: impl Read) -> Result<Class, Box<dyn Error>> {
-        let mut data = data.bytes();
-        let magic = data.next_u32();
-        let minor_version = data.next_u16();
-        let major_version = data.next_u16();
+        let mut reader = BufReader::new(data).bytes();
+        // let mut data = data.bytes();
+        let magic = reader.next_u32();
+        let minor_version = reader.next_u16();
+        let major_version = reader.next_u16();
         let access_flags = AccessFlags(ACC_PUBLIC);
         // .next_chunk::<4>().unwrap().map(|i| i.unwrap());
 
@@ -45,20 +46,30 @@ mod access_flags {
     pub struct AccessFlags(pub u16);
     pub const ACC_PUBLIC: u16 = 0x0001u16;
 }
-trait NextNumber {
-    fn next_u32(&mut self) -> u32;
-    fn next_u16(&mut self) -> u16;
+trait Scanner {
+    fn next_u32(&mut self) -> Result<u32, ()>;
+    fn next_u16(&mut self) -> Result<u16, ()>;
 }
 
-impl<T> NextNumber for Bytes<T>
+impl<T> Scanner for Bytes<T>
 where
     T: Read,
 {
-    fn next_u32(&mut self) -> u32 {
-        u32::from_le_bytes(self.next_chunk::<4>().unwrap().map(|i| i.unwrap()))
+    fn next_u32(&mut self) -> Result<u32, ()> {
+        Ok(u32::from_le_bytes(
+            self.next_chunk::<4>()
+                .or(Err(()))?
+                .try_map(|i| i)
+                .or(Err(()))?,
+        ))
     }
-    fn next_u16(&mut self) -> u16 {
-        u16::from_le_bytes(self.next_chunk::<2>().unwrap().map(|i| i.unwrap()))
+    fn next_u16(&mut self) -> Result<u16, ()> {
+        Ok(u16::from_le_bytes(
+            self.next_chunk::<2>()
+                .or(Err(()))?
+                .try_map(|i| i)
+                .or(Err(()))?,
+        ))
     }
 }
 
