@@ -10,4 +10,4 @@ title = "Covert C2 Ping"
 runnable = false
 
 [build]
-build-dir = "doc"
+build-dir = "out/doc"
