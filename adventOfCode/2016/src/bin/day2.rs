@@ -4,7 +4,7 @@ use helper::get_input;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input = get_input("2016", "2", true)?;
-    // part1(&input);
+    part1(&input);
     part2(&input);
     Ok(())
 }
