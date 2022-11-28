@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 use helper::get_input;
 use std::error::Error;
 

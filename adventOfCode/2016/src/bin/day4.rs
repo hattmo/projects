@@ -1,4 +1,5 @@
 #![feature(string_remove_matches)]
+#![allow(dead_code)]
 use helper::get_input;
 use std::{collections::HashMap, error::Error};
 
@@ -6,7 +7,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let input = get_input("2016", "4", true)?;
     let solution = part_1(&input);
     println!("part1 {solution}");
-    part_2(&input);
+    let solution = part_2(&input);
+    println!("part2 {solution}");
     Ok(())
 }
 
@@ -50,11 +52,44 @@ fn part_1(input: &str) -> i32 {
         .unwrap_or(0)
 }
 
-fn part_2(input: &str) {}
+fn decrypt_name(arg: &str) -> String {
+    let (encrypted, key) = arg.rsplit_once("-").expect("Failed to parse");
+    let key = key.parse::<u32>().expect("Failed to parse");
+    return encrypted
+        .chars()
+        .map(|c| {
+            if c == '-' {
+                return ' ';
+            }
+            let mut new_c = c;
+            for _ in 0..key {
+                if new_c == 'z' {
+                    new_c = 'a';
+                } else {
+                    let mut out: u32 = new_c.into();
+                    out += 1;
+                    new_c = char::from_u32(out).expect("bad char");
+                }
+            }
+            new_c
+        })
+        .collect::<String>();
+}
+
+fn part_2(input: &str) -> &str {
+    input
+        .lines()
+        .map(|line| line.split_once("[").expect("Failed to parse").0)
+        .map(|item| (item, item.rsplit_once("-").expect("Failed to parse").1))
+        .map(|(encrypted, key)| (decrypt_name(encrypted), key))
+        .find(|(item, _)| item == "northpole object storage")
+        .expect("Not found")
+        .1
+}
 
 #[cfg(test)]
 mod test {
-    use crate::part_1;
+    use crate::{decrypt_name, part_1};
 
     #[test]
     fn test1() {
@@ -79,5 +114,11 @@ mod test {
         let test_data = "totally-real-room-200[decoy]";
         let total = part_1(test_data);
         assert_eq!(0, total);
+    }
+
+    #[test]
+    fn test5() {
+        let decrypted = decrypt_name("qzmt-zixmtkozy-ivhz-343");
+        assert_eq!(decrypted, "very encrypted name".to_owned());
     }
 }
