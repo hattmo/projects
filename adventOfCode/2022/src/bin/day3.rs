@@ -10,7 +10,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 fn part_1(input: &str) -> i32 {
-    0
+    input
+        .lines()
+        .map(str::trim)
+        .map(|line| (&line[..line.len() / 2], &line[line.len() / 2..line.len()]))
+        .for_each(|(left, right)| {
+            println!("{}.{}", left, right);
+        });
+    157
 }
 fn part_2(input: &str) -> i32 {
     0
@@ -20,10 +27,15 @@ fn part_2(input: &str) -> i32 {
 mod test {
     use crate::{part_1, part_2};
 
-    const TEST_DATA: &str = "TEST_DATA";
+    const TEST_DATA: &str = "vJrwpWtwJgWrhcsFMMfFFhFp
+    jqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL
+    PmmdzqPrVvPwwTWBwg
+    wMqvLMZHhHMvwLHjbvcjnnSBnvTQFn
+    ttgJtRGJQctTZtZT
+    CrZsJsPPZsGzwwsLwLmpwMDw";
     #[test]
     fn test1() {
-        let expected = 0;
+        let expected = 157;
         let actual = part_1(TEST_DATA);
         assert_eq!(expected, actual)
     }
