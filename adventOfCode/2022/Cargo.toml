@@ -6,3 +6,4 @@ version = "0.1.0"
 [dependencies]
 helper = {path = "../helper"}
 itertools = "0.10.5"
+regex = "1.7.0"
