@@ -26,6 +26,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "aoc_2017"
+version = "0.1.0"
+dependencies = [
+ "helper",
+ "itertools",
+ "regex",
+]
+
+[[package]]
 name = "aoc_2022"
 version = "0.1.0"
 dependencies = [
