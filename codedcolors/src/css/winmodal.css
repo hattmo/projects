@@ -1,0 +1,30 @@
+.winmodal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin-top: -180px;
+  margin-left: -250px;
+  width: 500px;
+  height: 360px;
+}
+
+.winoverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(rgb(0, 255, 0, 1), rgb(0, 255, 0, 0.4))
+}
+
+.winblock {
+  display: grid;
+  grid-template-areas: 'text' 'button';
+}
+
+.wintitle {
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 50px;
+  text-align: center;
+  grid-area: text;
+}

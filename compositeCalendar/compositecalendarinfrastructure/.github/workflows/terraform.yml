@@ -1,0 +1,49 @@
+name: Build Workflow
+
+on: push
+
+jobs:
+  CICD:
+    name: CI-CD
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v1
+
+      - name: "Terraform Init"
+        uses: hashicorp/terraform-github-actions@master
+        with:
+          tf_actions_version: 0.12.21
+          tf_actions_subcommand: "init"
+          tf_actions_comment: false
+        env:
+          GOOGLE_CREDENTIALS: ${{secrets.GOOGLE_CREDENTIALS}}
+          MONGODB_ATLAS_PRIVATE_KEY: ${{secrets.MONGODB_ATLAS_PRIVATE_KEY}}
+          MONGODB_ATLAS_PUBLIC_KEY: ${{secrets.MONGODB_ATLAS_PUBLIC_KEY}}
+          TF_VAR_OAUTH_CLIENT_SECRET: ${{secrets.OAUTH_CLIENT_SECRET}}
+          TF_VAR_OAUTH_CLIENT_ID: ${{secrets.OAUTH_CLIENT_ID}}
+      - name: "Terraform Plan"
+        uses: hashicorp/terraform-github-actions@master
+        with:
+          tf_actions_version: 0.12.21
+          tf_actions_subcommand: "plan"
+          tf_actions_comment: false
+        env:
+          GOOGLE_CREDENTIALS: ${{secrets.GOOGLE_CREDENTIALS}}
+          MONGODB_ATLAS_PRIVATE_KEY: ${{secrets.MONGODB_ATLAS_PRIVATE_KEY}}
+          MONGODB_ATLAS_PUBLIC_KEY: ${{secrets.MONGODB_ATLAS_PUBLIC_KEY}}
+          TF_VAR_OAUTH_CLIENT_SECRET: ${{secrets.OAUTH_CLIENT_SECRET}}
+          TF_VAR_OAUTH_CLIENT_ID: ${{secrets.OAUTH_CLIENT_ID}}
+      - name: "Terraform Apply"
+        if: github.ref == 'refs/heads/master'
+        uses: hashicorp/terraform-github-actions@master
+        with:
+          tf_actions_version: 0.12.21
+          tf_actions_subcommand: "apply"
+          tf_actions_comment: false
+        env:
+          GOOGLE_CREDENTIALS: ${{secrets.GOOGLE_CREDENTIALS}}
+          MONGODB_ATLAS_PRIVATE_KEY: ${{secrets.MONGODB_ATLAS_PRIVATE_KEY}}
+          MONGODB_ATLAS_PUBLIC_KEY: ${{secrets.MONGODB_ATLAS_PUBLIC_KEY}}
+          TF_VAR_OAUTH_CLIENT_SECRET: ${{secrets.OAUTH_CLIENT_SECRET}}
+          TF_VAR_OAUTH_CLIENT_ID: ${{secrets.OAUTH_CLIENT_ID}}
