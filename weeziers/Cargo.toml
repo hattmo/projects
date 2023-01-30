@@ -1,2 +1,2 @@
 [workspace]
-members=["weezie-core"]
+members = ["weezie-core", "cli"]

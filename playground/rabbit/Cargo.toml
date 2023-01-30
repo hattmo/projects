@@ -1,12 +1,10 @@
 [package]
-name = "java_decompiler"
+name = "rabbit"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nom = "7.1.3"
-petgraph = "0.6.2"
-rand = "0.8.5"
-thiserror = "1.0.37"
+amiquip = "0.4.2"
+tokio = { version = "1.24.2", features = ["full"] }

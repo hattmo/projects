@@ -23,11 +23,12 @@ impl CoreBuilder {
         self.capabilities.push(tunnel)
     }
     pub fn run(&self) -> Result<!, &str> {
-        let jobs = Vec::new();
-        let (send, recv) = channel::<Message>();
-        for cap in self.capabilities {
-            std::thread::spawn(|| {});
-        }
-        Err("Exited")
+        // let jobs = Vec::new();
+        // let (send, recv) = channel::<Message>();
+        // for cap in self.capabilities {
+        //     std::thread::spawn(|| {});
+        // }
+        // Err("Exited")
+        todo!()
     }
 }

@@ -1,7 +1,6 @@
-use crate::{ParseFailure, PatchType, Scanner};
-
 use std::{
-    borrow::BorrowMut,
+    collections::HashMap,
+    hash,
     io::{Bytes, Read},
 };
 
@@ -132,129 +131,14 @@ impl Constant {
 }
 
 pub struct ConstPool {
-    constants: Vec<Constant>,
+    constants: HashMap<u16, Constant>,
 }
 
 impl ConstPool {
     pub fn new() -> Self {
         ConstPool {
-            constants: Vec::new(),
+            constants: HashMap::new(),
         }
-    }
-    pub fn from_reader(mut reader: Bytes<impl Read>) -> Result<ConstPool, ParseFailure> {
-        let mut out = ConstPool::new();
-        let const_count = reader.next_u16()?;
-        out.constants.push(Constant::Null);
-        for _ in 1..const_count {
-            let tag = reader.next_u8()?;
-            match tag {
-                tag::Class => {
-                    out.constants.push(Constant::Class {
-                        name_index: reader.next_u16()?,
-                    });
-                }
-                tag::Fieldref => {
-                    let class_index = reader.next_u16()?;
-                    let name_and_type_index = reader.next_u16()?;
-                    out.constants.push(Constant::Fieldref {
-                        class_index,
-                        name_and_type_index,
-                    });
-                }
-                tag::Methodref => {
-                    let class_index = reader.next_u16()?;
-                    let name_and_type_index = reader.next_u16()?;
-                    out.constants.push(Constant::Methodref {
-                        class_index,
-                        name_and_type_index,
-                    });
-                }
-                tag::InterfaceMethodref => {
-                    let class_index = reader.next_u16()?;
-                    let name_and_type_index = reader.next_u16()?;
-                    out.constants.push(Constant::InterfaceMethodref {
-                        class_index,
-                        name_and_type_index,
-                    });
-                }
-                tag::String => {
-                    out.constants.push(Constant::String {
-                        string_index: reader.next_u16()?,
-                    });
-                }
-                tag::Integer => {
-                    out.constants.push(Constant::Integer {
-                        bytes: reader.next_u32()?,
-                    });
-                }
-                tag::Float => {
-                    out.constants.push(Constant::Float {
-                        bytes: reader.next_u32()?,
-                    });
-                }
-                tag::Long => {
-                    let high_bytes = reader.next_u32()?;
-                    let low_bytes = reader.next_u32()?;
-                    out.constants.push(Constant::Long {
-                        high_bytes,
-                        low_bytes,
-                    });
-                    out.constants.push(Constant::Null)
-                }
-                tag::Double => {
-                    let high_bytes = reader.next_u32()?;
-                    let low_bytes = reader.next_u32()?;
-                    out.constants.push(Constant::Double {
-                        high_bytes,
-                        low_bytes,
-                    });
-                    out.constants.push(Constant::Null)
-                }
-                tag::NameAndType => {
-                    let name_index = reader.next_u16()?;
-                    let descriptor_index = reader.next_u16()?;
-                    out.constants.push(Constant::NameAndType {
-                        name_index,
-                        descriptor_index,
-                    });
-                }
-                tag::Utf8 => {}
-                tag::MethodHandle => {}
-                tag::MethodType => {}
-                tag::InvokeDynamic => {}
-                _ => return Err(ParseFailure),
-            }
-        }
-        Ok(out)
-    }
-
-    pub fn insert_const(&mut self, index: u16, item: Constant) -> Result<(), ()> {
-        let index_usize: usize = index.try_into().or(Err(()))?;
-        if let Constant::Null = self.constants.get(index_usize).ok_or(())? {
-            return Err(());
-        }
-        self.constants.insert(index_usize, item);
-        Ok(())
-    }
-
-    fn patch_pointers(
-        &mut self,
-        modified_index: u16,
-        transform: fn(&mut &mut u16) -> (),
-        patch_type: PatchType,
-    ) -> Result<(), ()> {
-        for constant in self.constants.iter_mut() {
-            if constant.get_pointers().iter().any(|i| **i == modified_index) {};
-        }
-
-        for constant in self.constants.iter_mut() {
-            constant
-                .get_pointers()
-                .iter_mut()
-                .filter(|i| ***i >= modified_index)
-                .for_each(transform);
-        }
-        Ok(())
     }
 }
 
@@ -263,11 +147,5 @@ mod test {
     use super::{ConstPool, Constant};
 
     #[test]
-    fn foo() {
-        let mut foo = ConstPool::new();
-        foo.constants.push(Constant::Null);
-        foo.constants.push(Constant::Class { name_index: 2 });
-        foo.patch_pointers(0, |i| **i -= 1, crate::PatchType::Remove);
-        println!("{:?}", foo.constants);
-    }
+    fn foo() {}
 }

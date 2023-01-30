@@ -10,13 +10,22 @@ autoinstall:
     identity:
         hostname: base
         username: admin
-        password: "$6$rounds=4096$ntlX/dlo6b$HXaLN4RcLIGaEDdQdR2VTYi9pslSeXWL131MqaakqE285Nv0kW9KRontQYivCbycZerUMcjVsuLl2V8bbdadI1"
+        password: "$1$ID86MhWM$HinsS6ZP9ooFI5WqQXkvB0"
     ssh:
         install-server: yes
         allow-pw: no
     storage:
         layout:
             name: lvm
+    network:
+        version: 2
+        renderer: networkd
+        ethernets:
+            default:
+                match:
+                    name: e*
+                dhcp4: yes
+                dhcp-identifier: mac
     late-commands:
         - "echo 'TrustedUserCAKeys /etc/ssh/ca.pub' > /target/etc/ssh/sshd_config.d/base.conf"
         - "echo '${ca_cert_pub}' > /target/etc/ssh/ca.pub"

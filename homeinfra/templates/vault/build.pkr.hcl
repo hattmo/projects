@@ -17,44 +17,9 @@ source "vsphere-clone" "vault" {
   datastore           = "datastore1"
   insecure_connection = true
 
-  guest_os_type       = "ubuntu64Guest"
-  convert_to_template = false
+  template = "ubuntu_f1dc6a56-9a7d-4f35-800a-e9716a0270b1"
+  convert_to_template = true
 
-  CPUs      = 4
-  cpu_cores = 1
-  RAM       = 32768
-
-
-  network_adapters {
-    network_card = "vmxnet3"
-    network      = "LAN"
-  }
-
-  storage {
-    disk_size             = 65536
-    disk_thin_provisioned = true
-  }
-
-
-  iso_url = "https://releases.ubuntu.com/focal/ubuntu-20.04.5-live-server-amd64.iso"
-  iso_checksum = "5035be37a7e9abbdc09f0d257f3e33416c1a0fb322ba860d42d74aa75c3468d4"
-
-  floppy_content = {
-    "user-data" = templatefile("${path.root}/user-data.pkrtpl.hcl", {
-      ca_cert_pub = file("${path.root}/../../admin/ca.pub")
-    })
-    "meta-data" = templatefile("${path.root}/meta-data.pkrtpl.hcl", {
-    })
-  }
-  floppy_label = "cidata"
-
-  boot_wait = "1s"
-  boot_command = [
-    "<bs><wait><bs><wait><bs><wait>",
-    "<esc><f6><esc>",
-    "ipv6.disable=1 net.ifnames=0 autoinstall ds=nocloud",
-    "<enter>"
-  ]
   shutdown_command = "sudo shutdown -h now"
 
   communicator         = "ssh"
@@ -65,10 +30,13 @@ source "vsphere-clone" "vault" {
 }
 
 build {
-  name = "ubuntu-base"
+  name = "vault"
   sources = [
-    "source.vsphere-iso.ubuntu-base"
+    "source.vsphere-clone.vault"
   ]
+  provisioner "shell" {
+    script = "${path.root}/setup.sh"
+  }
 }
 
 packer {
