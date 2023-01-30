@@ -1,3 +1,6 @@
 [submodule "obfuscate_string/tree-sitter-c"]
 	path = obfuscate_string/tree-sitter-c
 	url = git@github.com:tree-sitter/tree-sitter-c.git
+[submodule "covert_c2"]
+	path = covert_c2
+	url = git@github.com:hattmo/covert_c2.git
