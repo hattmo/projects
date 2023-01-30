@@ -4,3 +4,6 @@
 [submodule "covert_c2"]
 	path = covert_c2
 	url = git@github.com:hattmo/covert_c2.git
+[submodule "covert_c2_ping"]
+	path = covert_c2_ping
+	url = git@github.com:hattmo/covert_c2_ping.git
