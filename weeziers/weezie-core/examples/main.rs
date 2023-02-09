@@ -3,4 +3,9 @@
 //     let core = Core::new(None);
 //     core.run();
 // }
-fn main() {}
+use weezie_core::Core;
+
+fn main() {
+    let mut core = Core::new();
+    core.run();
+}
