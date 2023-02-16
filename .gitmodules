@@ -7,3 +7,6 @@
 [submodule "covert_c2_ping"]
 	path = covert_c2_ping
 	url = git@github.com:hattmo/covert_c2_ping.git
+[submodule "pwntools"]
+	path = pwntools
+	url = git@github.com:hattmo/pwntools.git
