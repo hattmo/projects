@@ -2,12 +2,10 @@
 authors = ["Matthew \"Oscar\" Howard"]
 description = "Rewrites c files to remove string literals"
 edition = "2021"
-homepage = "https://github.com/hattmo/simple_string_obfuscator"
 license = "MIT OR Apache-2.0"
-name = "simple_string_obfuscator"
+name = "easy_obfuscate"
 publish = false
 readme = "./Readme"
-repository = "https://github.com/hattmo/simple_string_obfuscator"
 version = "0.1.0"
 
 [dependencies]

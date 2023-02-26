@@ -73,6 +73,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "easy_obfuscate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cc",
+ "clap",
+ "nom",
+ "rand",
+ "tree-sitter",
+ "tree-sitter-traversal",
+]
+
+[[package]]
 name = "errno"
 version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -291,19 +304,6 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "windows-sys",
-]
-
-[[package]]
-name = "simple_string_obfuscator"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cc",
- "clap",
- "nom",
- "rand",
- "tree-sitter",
- "tree-sitter-traversal",
 ]
 
 [[package]]

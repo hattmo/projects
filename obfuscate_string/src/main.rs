@@ -157,16 +157,15 @@ static char *lookup(int index, int start, int end)
 
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take, take_until1, take_while1},
-    character::{is_hex_digit, streaming::hex_digit1},
-    combinator::{map, value},
+    bytes::complete::{tag, take},
+    combinator::{all_consuming, map, map_res, value},
     multi::many0,
     sequence::preceded,
     IResult,
 };
 
 fn transform_escape(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
-    many0(alt((
+    all_consuming(many0(alt((
         preceded(
             tag(b"\\"),
             alt((
@@ -181,13 +180,17 @@ fn transform_escape(input: &[u8]) -> IResult<&[u8], Vec<u8>> {
                 value(b'\\', tag(b"\\")),
                 value(b'\'', tag(b"'")),
                 value(b'"', tag(b"\"")),
-                map(preceded(tag(b"x"), take(2usize)), |hex: &[u8]| {
-                    u8::from_str_radix(&String::from_utf8(hex.to_vec()).unwrap(), 16).unwrap()
+                map_res(preceded(tag(b"x"), take(2usize)), |hex: &[u8]| {
+                    u8::from_str_radix(
+                        &String::from_utf8(hex.to_vec()).or(Err(anyhow!("Not utf8")))?,
+                        16,
+                    )
+                    .or(Err(anyhow!("Not u8 byte")))
                 }),
             )),
         ),
         map(take(1usize), |foo: &[u8]| foo[0]),
-    )))(input)
+    ))))(input)
 }
 
 #[cfg(test)]
