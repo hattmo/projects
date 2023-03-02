@@ -1,0 +1,17 @@
+{
+  "name": "xss",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dst/index.js",
+  "scripts": {
+    "start": "node dst/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc && esbuild --minify --outfile=dst/loader.min.js dst/loader.js "
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^4.9.5",
+    "esbuild": "^0.17.10"
+  }
+}
