@@ -1,7 +1,7 @@
 use axum::{
     body::Bytes,
     routing::{get_service, post},
-    Json, Router,
+    Router,
 };
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -13,7 +13,6 @@ use std::env;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
-
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -31,8 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::debug!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
-        .await
-        .unwrap();
+        .await?;
     Ok(())
 }
 
