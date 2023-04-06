@@ -1,21 +1,17 @@
-#![feature(try_blocks)]
 #![feature(io_error_other)]
 
 mod scan_result;
 
 use axum::routing::get;
+use chrono::Local;
 use lazy_static::lazy_static;
 use quick_xml::de::from_str;
 use scan_result::ScanResult;
 use std::{
-    io::{Error, ErrorKind, Result},
-    process::Stdio,
+    env,
+    io::{self, Error, ErrorKind, Result},
 };
-use tokio::{
-    process::Command,
-    sync::RwLock,
-    time::{self, Duration, Instant},
-};
+use tokio::{fs::read, process::Command, sync::RwLock};
 
 lazy_static! {
     static ref LAST_SCAN: RwLock<ScanResult> = RwLock::new(ScanResult::default());
@@ -25,7 +21,7 @@ lazy_static! {
 async fn main() {
     let scan_job = tokio::spawn(scan_job());
     let web_job = tokio::spawn(web_job());
-    scan_job.await.unwrap();
+    scan_job.await.unwrap().unwrap();
     web_job.await.unwrap();
 }
 
@@ -44,41 +40,39 @@ async fn web_job() {
         .unwrap();
 }
 
-async fn scan_job() {
-    let mut start = Instant::now();
+async fn scan_job() -> Result<()> {
+    let target_env = env::var("TARGET").or(Err(io::Error::other("No target set")))?;
+    let targets: Vec<_> = target_env.split(' ').map(|item| item.to_string()).collect();
     loop {
-        println!("Starting scan job at {:?}", start);
-        let _: Result<()> = try {
-            let mut res = Command::new("nmap")
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .arg("-A")
-                .arg("--unprivileged")
-                .arg("-oX")
-                .arg("scan.xml")
-                .arg("172.30.0.0/24")
-                .spawn()?;
-            res.wait().await?;
-        };
-        println!("Scan job finished at {:?}", Instant::now());
-        if let Err(e) = parse_xml().await {
+        println!("Starting scan at {}", Local::now());
+        let res = Command::new("nmap")
+            .arg("-vvv")
+            .arg("-A")
+            .arg("--unprivileged")
+            // .arg("-T1")
+            .arg("-oX")
+            .arg("scan.xml")
+            .args(targets.clone())
+            .status()
+            .await?;
+        if !res.success() {
+            println!("Scan failed with status: {}", res);
+        } else if let Err(e) = parse_xml().await {
             println!("Error parsing XML: {}", e);
         };
-        while start < Instant::now() {
-            start += Duration::from_secs(1800);
-        }
-        println!("Next scan job at {:?}", start);
-        time::sleep_until(start).await;
+        println!("Done scanning, sleeping for 1 hour");
+        tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
     }
 }
 
 async fn parse_xml() -> Result<()> {
-    let scan_results = String::from_utf8(tokio::fs::read("scan.xml").await?)
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+    println!("Parsing XML");
+
+    let scan_results =
+        String::from_utf8(read("scan.xml").await?).map_err(|e| Error::new(ErrorKind::Other, e))?;
     let results = from_str::<ScanResult>(scan_results.as_str())
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
     let mut guard = LAST_SCAN.write().await;
-    println!("{}", results);
     *guard = results;
     Ok(())
 }

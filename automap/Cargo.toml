@@ -6,8 +6,9 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = {version = "0.6.11", features = ["ws"]}
-lazy_static = "1.4.0"
-quick-xml = {version = "0.28.0", features = ["serde", "serialize", "serde-types"]}
-serde = { version = "1.0.155", features = ["derive"] }
-tokio = {version = "1.26.0", features = ["full"]}
+axum = {version = "0.6", features = ["ws"]}
+chrono = "0.4"
+lazy_static = "1.4"
+quick-xml = { version = "0.28", features = ["serde", "serialize", "serde-types", "overlapped-lists"] }
+serde = { version = "1", features = ["derive"] }
+tokio = {version = "1", features = ["full"]}

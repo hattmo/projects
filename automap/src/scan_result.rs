@@ -4,24 +4,46 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct ScanResult {
-    host: Option<Vec<Host>>,
+    #[serde(default)]
+    host: Vec<Host>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Host {
     address: Address,
-    ports: Ports,
+    status: Status,
+    hostnames: Option<HostNames>,
+    ports: Option<Ports>,
 }
+
 #[derive(Debug, Deserialize)]
 struct Address {
     #[serde(rename = "@addr")]
     addr: String,
-    #[serde(rename = "@addrtype")]
-    addrtype: String,
 }
+
+#[derive(Debug, Deserialize)]
+struct Status {
+    #[serde(rename = "@state")]
+    state: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct HostNames {
+    #[serde(default)]
+    hostname: Vec<HostName>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HostName {
+    #[serde(rename = "@name")]
+    name: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct Ports {
-    port: Option<Vec<Port>>,
+    #[serde(default)]
+    port: Vec<Port>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,17 +57,44 @@ struct Port {
 impl Display for ScanResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let mut results = Vec::new();
-        if let Some(host) = &self.host {
-            for host in host {
-                if let Some(ports) = &host.ports.port {
-                    let ports = ports
-                        .iter()
-                        .map(|p| p.portid.clone())
-                        .collect::<Vec<String>>()
-                        .join(",");
-                    results.push(format!("{}: {}", host.address.addr, ports));
-                }
+        for host in self.host.iter() {
+            if host.status.state == "down" {
+                continue;
             }
+            let port_str = host
+                .ports
+                .as_ref()
+                .map(|port| {
+                    port.port
+                        .iter()
+                        .map(|p| format!("{}({})", p.protocol, p.portid))
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                })
+                .unwrap_or("No open ports".to_string());
+            let hostname_str = if let Some(ref hostnames) = host.hostnames {
+                if hostnames.hostname.is_empty() {
+                    "".to_string()
+                } else {
+                    " (".to_string()
+                        + &hostnames
+                            .hostname
+                            .iter()
+                            .map(|h| h.name.clone())
+                            .collect::<Vec<String>>()
+                            .join(", ")
+                        + ")"
+                }
+            } else {
+                "".to_string()
+            };
+            results.push(format!(
+                "{}{}: {}",
+                host.address.addr, hostname_str, port_str
+            ));
+        }
+        if results.is_empty() {
+            results.push("No hosts found".to_string());
         }
         write!(f, "{}", results.join("\n"))?;
         Ok(())
@@ -54,6 +103,6 @@ impl Display for ScanResult {
 
 impl Default for ScanResult {
     fn default() -> Self {
-        Self { host: None }
+        Self { host: Vec::new() }
     }
 }

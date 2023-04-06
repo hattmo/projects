@@ -1,0 +1,5 @@
+FROM ubuntu:latest
+RUN apt-get update && apt-get install -y openssl ca-certificates
+RUN update-ca-certificates
+ADD target/release/voice_assistant /APP/voice_assistant
+ENTRYPOINT [ "/APP/voice_assistant" ]
