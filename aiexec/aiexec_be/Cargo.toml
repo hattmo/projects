@@ -1,0 +1,20 @@
+[package]
+edition = "2021"
+name = "aiexec_be"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.70"
+axum = { version = "0.6.17", features = ["headers"] }
+clap = { version = "4.2.5", features = ["derive", "env"] }
+http = "0.2.9"
+mongodb = {version = "2.5.0", features = ["tokio-runtime"]}
+rand = "0.8.5"
+reqwest = {version = "0.11.16", features = ["json"]}
+serde = {version = "1.0.160", features = ["derive"]}
+serde_json = "1.0.96"
+tokio = {version = "1.28.0", features = ["full"]}
+tracing = "0.1.38"
+tracing-subscriber = "0.3.17"

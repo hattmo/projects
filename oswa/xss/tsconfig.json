@@ -1,7 +1,9 @@
 {
     "compilerOptions": {
-        "module": "ESNext",
+        "module": "CommonJS",
         "outDir": "dst",
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
     },
     "exclude": [
         "node_modules"

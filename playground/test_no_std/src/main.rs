@@ -42,11 +42,7 @@ fn panic(_panic: &PanicInfo<'_>) -> ! {
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    let mut bar: Vec<u8> = Vec::with_capacity(10);
-    bar.push(30);
-    bar.push(20);
-
-    exit(bar.last().unwrap().clone().into())
+    exit(1)
 }
 
 #[no_mangle]

