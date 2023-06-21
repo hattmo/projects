@@ -1,4 +1,4 @@
-#![feature(once_cell)]
+#![feature(lazy_cell)]
 use std::{collections::HashMap, sync::LazyLock};
 
 use anyhow::Result;
@@ -26,7 +26,7 @@ struct Config {
     mongo_uri: String,
 }
 
-static CONFIG: LazyLock<Config> = LazyLock::new(|| Config::parse());
+static CONFIG: LazyLock<Config> = LazyLock::new(Config::parse);
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -107,7 +107,6 @@ async fn exfil(
         .data()
         .await
         .unwrap_or(Ok(Bytes::new()))
-        .and_then(|i| Ok(i))
         .or(Err(StatusCode::INTERNAL_SERVER_ERROR))?
         .to_vec();
     let data = match std::str::from_utf8(&body) {

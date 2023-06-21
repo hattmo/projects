@@ -1,9 +1,7 @@
-#![feature(once_cell)]
-
+#![feature(lazy_cell)]
 use anyhow::Result;
 use clap::Parser;
 use std::sync::LazyLock;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt};
 
 use service::Settings;
 

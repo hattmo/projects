@@ -1,21 +1,28 @@
 #![feature(io_error_other)]
+#![feature(lazy_cell)]
+#![warn(clippy::pedantic)]
+#![warn(clippy::nursery)]
+#![warn(missing_docs)]
+
+//! # Nmap Scan Result
+//!
 
 mod scan_result;
 
 use axum::routing::get;
 use chrono::Local;
-use lazy_static::lazy_static;
 use quick_xml::de::from_str;
 use scan_result::ScanResult;
 use std::{
     env,
     io::{self, Error, ErrorKind, Result},
+    string::ToString,
+    sync::LazyLock,
 };
 use tokio::{fs::read, process::Command, sync::RwLock};
 
-lazy_static! {
-    static ref LAST_SCAN: RwLock<ScanResult> = RwLock::new(ScanResult::default());
-}
+static LAST_SCAN: LazyLock<RwLock<ScanResult>> =
+    LazyLock::new(|| RwLock::new(ScanResult::default()));
 
 #[tokio::main]
 async fn main() {
@@ -42,14 +49,13 @@ async fn web_job() {
 
 async fn scan_job() -> Result<()> {
     let target_env = env::var("TARGET").or(Err(io::Error::other("No target set")))?;
-    let targets: Vec<_> = target_env.split(' ').map(|item| item.to_string()).collect();
+    let targets: Vec<_> = target_env.split(' ').map(ToString::to_string).collect();
     loop {
         println!("Starting scan at {}", Local::now());
         let res = Command::new("nmap")
             .arg("-vvv")
             .arg("-A")
             .arg("--unprivileged")
-            // .arg("-T1")
             .arg("-oX")
             .arg("scan.xml")
             .args(targets.clone())
@@ -72,7 +78,6 @@ async fn parse_xml() -> Result<()> {
         String::from_utf8(read("scan.xml").await?).map_err(|e| Error::new(ErrorKind::Other, e))?;
     let results = from_str::<ScanResult>(scan_results.as_str())
         .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    let mut guard = LAST_SCAN.write().await;
-    *guard = results;
+    *LAST_SCAN.write().await = results;
     Ok(())
 }
