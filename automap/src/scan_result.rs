@@ -1,8 +1,7 @@
+use serde::Deserialize;
 use std::fmt::{Display, Formatter, Result};
 
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct ScanResult {
     #[serde(default)]
     host: Vec<Host>,
@@ -57,21 +56,20 @@ struct Port {
 impl Display for ScanResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let mut results = Vec::new();
-        for host in self.host.iter() {
+        for host in &self.host {
             if host.status.state == "down" {
                 continue;
             }
             let port_str = host
                 .ports
                 .as_ref()
-                .map(|port| {
+                .map_or("No open ports".to_string(), |port| {
                     port.port
                         .iter()
                         .map(|p| format!("{}({})", p.protocol, p.portid))
                         .collect::<Vec<String>>()
                         .join(", ")
-                })
-                .unwrap_or("No open ports".to_string());
+                });
             let hostname_str = if let Some(ref hostnames) = host.hostnames {
                 if hostnames.hostname.is_empty() {
                     "".to_string()
@@ -98,11 +96,5 @@ impl Display for ScanResult {
         }
         write!(f, "{}", results.join("\n"))?;
         Ok(())
-    }
-}
-
-impl Default for ScanResult {
-    fn default() -> Self {
-        Self { host: Vec::new() }
     }
 }

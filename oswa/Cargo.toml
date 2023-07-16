@@ -1,5 +1,5 @@
 [workspace]
-members = ["xss_server"]
+members = ["xss_server","util"]
 
 [profile.release]
 lto = true
