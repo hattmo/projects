@@ -6,14 +6,14 @@ use axum::{
     body::{Body, Bytes, HttpBody},
     extract::State,
     routing::any,
-    Router,
+    Router, response::IntoResponse,
 };
 
 use clap::Parser;
 use http::{Request, StatusCode};
 use mongodb::Client;
 use serde::{Deserialize, Serialize};
-use tokio::fs::create_dir_all;
+use tokio::fs::{self, create_dir_all};
 use tower_http::{
     cors::{Any, CorsLayer},
     services::{ServeDir, ServeFile},
@@ -30,19 +30,10 @@ static CONFIG: LazyLock<Config> = LazyLock::new(Config::parse);
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let client = Client::with_uri_str(&CONFIG.mongo_uri).await?;
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
-    let client = Client::with_uri_str(&CONFIG.mongo_uri).await?;
-
-    create_dir_all("static").await?;
-    let serve_dir = ServeDir::new("static").not_found_service(ServeFile::new("static/index.html"));
-
     let trace_layer = TraceLayer::new_for_http()
         .make_span_with(
             DefaultMakeSpan::new()
@@ -53,11 +44,30 @@ async fn main() -> Result<()> {
         .on_response(DefaultOnResponse::new().level(Level::INFO))
         .on_failure(DefaultOnFailure::new().level(Level::ERROR));
 
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .allow_private_network(true)
+        .expose_headers(Any);
+
+    create_dir_all("static").await?;
+    if !fs::try_exists("static/index.html").await? {
+        fs::write(
+                "static/index.html",
+                br#"<html><head><title>My Site</title></head><body><p>Nothing to see here</p></body></html>"#,
+            ).await?;
+    }
+
+    let serve_dir = ServeDir::new("static");
+    let index = ServeFile::new("static/index.html");
+
     let app = Router::new()
         .route("/x", any(exfil))
         .route("/x/*rest", any(exfil))
+        .route("/cb", any(call_back))
         .nest_service("/static", serve_dir.clone())
-        .fallback_service(serve_dir)
+        .fallback_service(index)
         .layer(cors)
         .layer(trace_layer)
         .with_state(client);
@@ -113,7 +123,7 @@ async fn exfil(
         Ok(s) => StrOrBytes::Str(s.to_string()),
         Err(_) => StrOrBytes::Bytes(body),
     };
-    let doc = ExfilData {
+    let doc: ExfilData = ExfilData {
         data,
         headers,
         uri: request.uri().to_string(),
@@ -122,4 +132,8 @@ async fn exfil(
         .await
         .or(Err(StatusCode::INTERNAL_SERVER_ERROR))?;
     Ok(StatusCode::OK)
+}
+
+async fn call_back() -> impl IntoResponse {
+    "console.log('Hello, world!')"
 }
