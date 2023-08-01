@@ -1,15 +1,2 @@
-[package]
-edition = "2021"
-name = "factorio_server"
-version = "0.1.0"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-anyhow = "1"
-axum = "0.6"
-clap = {version = "4", features = ["derive"]}
-rand = "0.8"
-serde = {version = "1", features = ["derive"]}
-serde_json = "1"
-tokio = {verson = "1", features = ["full"]}
+[workspace]
+members = ['factorio_server','factorio_ui']
