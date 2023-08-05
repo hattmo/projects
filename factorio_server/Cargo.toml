@@ -1,2 +1,2 @@
 [workspace]
-members = ['factorio_server','factorio_ui']
+members = ['factorio_server']

@@ -1,10 +1,16 @@
 #![feature(lazy_cell)]
 use anyhow::Result;
-use axum::{Server, Router, routing::get, ServiceExt};
+use axum::{
+    extract::Path,
+    response::{Html, IntoResponse},
+    routing::get,
+    Router, Server, ServiceExt,
+};
 use clap::Parser;
 use service::Settings;
 use std::{net::SocketAddr, sync::LazyLock};
 use tower_http::services::ServeDir;
+
 mod service;
 mod settings;
 
@@ -18,10 +24,15 @@ struct Config {
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+    tracing::info!("Starting server");
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
-    let layer = ServeDir::new(std::path::Path::new("./static"));
-    let router = Router::new().route_service("/", layer).route("/", get(root));
-    Server::bind(&addr).serve(router.into_make_service()).await?;
+    let router = Router::new()
+        .route("/", get(index))
+        .route("/ui/:element", get(ui));
+    Server::bind(&addr)
+        .serve(router.into_make_service())
+        .await?;
 
     let mut service = service::Service::new();
     let map_gen_settings = serde_json::from_str(include_str!("map_gen_settings.json"))?;
@@ -32,8 +43,15 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn root() -> &'static str {
-    "Hello, World!"
+async fn index() -> impl IntoResponse {
+    Html(include_str!("ui/index.html"))
+}
+
+async fn ui(Path(path): Path<String>) -> impl IntoResponse {
+    match path.as_str() {
+        "server_settings.html" => Ok(Html(include_str!("ui/server_settings.html"))),
+        _ => Err(()),
+    }
 }
 
 #[cfg(test)]

