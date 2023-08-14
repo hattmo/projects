@@ -12,14 +12,14 @@ use std::{
 
 pub fn create_htmx_form(data: &impl Serialize) -> String {
     let mut serializer = HTMXSerializer {
-        data: String::new(),
+        name_stack: Vec::new(),
     };
     data.serialize(&mut serializer).unwrap();
-    serializer.data
+    String::new()
 }
 
 struct HTMXSerializer {
-    data: String,
+    name_stack: Vec<String>,
 }
 
 impl<'a> SerializeSeq for &'a mut HTMXSerializer {
