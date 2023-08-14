@@ -1,0 +1,126 @@
+<form
+  class="server_settings"
+  id="server_settings"
+  hx-post="/api"
+  hx-ext="json-enc"
+>
+  <script>
+    document
+      .getElementById("server_settings")
+      .addEventListener("htmx:beforeRequest", function (event) {
+        params = event.detail.requestConfig.parameters;
+        params.tags = params.tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag !== "");
+
+        params.max_players = parseInt(params.max_players);
+
+        params.visibility = {};
+        params.visibility.public = params["visibility-public"] === "on";
+        params.visibility.lan = params["visibility-lan"] === "on";
+        delete params["visibility-public"];
+        delete params["visibility-lan"];
+
+        params.require_user_verification =
+          params.require_user_verification === "on";
+
+        params.max_upload_in_kilobytes_per_second = parseInt(
+          params.max_upload_in_kilobytes_per_second
+        );
+
+        params.max_upload_slots = parseInt(params.max_upload_slots);
+        params.minimum_latency_in_ticks = parseInt(
+          params.minimum_latency_in_ticks
+        );
+        params.max_heartbeats_per_second = parseInt(
+          params.max_heartbeats_per_second
+        );
+
+        params.ignore_player_limit_for_returning_players =
+          params.ignore_player_limit_for_returning_players === "on";
+
+        params.autosave_interval = parseInt(params.autosave_interval);
+        params.autosave_slots = parseInt(params.autosave_slots);
+        params.afk_autokick_interval = parseInt(params.afk_autokick_interval);
+        params.auto_pause = params.auto_pause === "on";
+        params.only_admins_can_pause_the_game =
+          params.only_admins_can_pause_the_game === "on";
+        params.autosave_only_on_server =
+          params.autosave_only_on_server === "on";
+        params.non_blocking_saving = params.non_blocking_saving === "on";
+        params.minimum_segment_size = parseInt(params.minimum_segment_size);
+        params.minimum_segment_size_peer_count = parseInt(
+          params.minimum_segment_size_peer_count
+        );
+        params.maximum_segment_size = parseInt(params.maximum_segment_size);
+        params.maximum_segment_size_peer_count = parseInt(
+          params.maximum_segment_size_peer_count
+        );
+
+        console.log(event.detail.requestConfig.parameters);
+      });
+  </script>
+  <label>name</label>
+  <input name="name" type="text" />
+  <label>description</label>
+  <input name="description" type="text" />
+  <label>tags</label>
+  <input name="tags" type="text" />
+  <label>max_players</label>
+  <input name="max_players" type="number" required />
+  <label style="grid-column: span 2">visibility</label>
+  <label>public</label>
+  <input name="visibility-public" type="checkbox" />
+  <label>lan</label>
+  <input name="visibility-lan" type="checkbox" />
+  <label>username</label>
+  <input name="username" type="text" />
+  <label>password</label>
+  <input name="password" type="password" />
+  <label>token</label>
+  <input name="token" type="password" />
+  <label>game_password</label>
+  <input name="game_password" type="text" />
+  <label>require_user_verification</label>
+  <input name="require_user_verification" type="checkbox" />
+  <label>max_upload_in_kilobytes_per_second</label>
+  <input name="max_upload_in_kilobytes_per_second" type="number" required />
+  <label>max_upload_slots</label>
+  <input name="max_upload_slots" type="number" required />
+  <label>minimum_latency_in_ticks</label>
+  <input name="minimum_latency_in_ticks" type="number" required />
+  <label>max_heartbeats_per_second</label>
+  <input name="max_heartbeats_per_second" type="number" required />
+  <label>ignore_player_limit_for_returning_players</label>
+  <input name="ignore_player_limit_for_returning_players" type="checkbox" />
+  <label>allow_commands</label>
+  <select name="allow_commands" id="">
+    <option value="true">True</option>
+    <option value="false">False</option>
+    <option value="admins-only">Admins Only</option>
+  </select>
+  <label>autosave_interval</label>
+  <input name="autosave_interval" type="number" required />
+  <label>autosave_slots</label>
+  <input name="autosave_slots" type="number" required />
+  <label>afk_autokick_interval</label>
+  <input name="afk_autokick_interval" type="number" required />
+  <label>auto_pause</label>
+  <input name="auto_pause" type="checkbox" />
+  <label>only_admins_can_pause_the_game</label>
+  <input name="only_admins_can_pause_the_game" type="checkbox" />
+  <label>autosave_only_on_server</label>
+  <input name="autosave_only_on_server" type="checkbox" />
+  <label>non_blocking_saving</label>
+  <input name="non_blocking_saving" type="checkbox" />
+  <label>minimum_segment_size</label>
+  <input name="minimum_segment_size" type="number" required />
+  <label>minimum_segment_size_peer_count</label>
+  <input name="minimum_segment_size_peer_count" type="number" required />
+  <label>maximum_segment_size</label>
+  <input name="maximum_segment_size" type="number" />
+  <label>maximum_segment_size_peer_count</label>
+  <input name="maximum_segment_size_peer_count" type="number" required />
+  <input type="submit" value="Save" />
+</form>

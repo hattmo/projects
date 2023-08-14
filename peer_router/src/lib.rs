@@ -1,12 +1,10 @@
-#![feature(generic_const_exprs)]
-
 use std::{
     collections::{HashMap, VecDeque},
     io::{Read, Write},
 };
 
 use serde::{Deserialize, Serialize};
-use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
+use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
 struct Engine {
     node: u32,
     buffers: HashMap<(u32, u32), VecDeque<u8>>,
@@ -22,7 +20,7 @@ impl Engine {
         }
     }
 
-    pub fn create_tunnel<const N: usize>(&mut self) -> Tunnel<N> {
+    pub fn create_tunnel(&mut self) -> Tunnel {
         self.tunnel_count += 1;
         Tunnel::new(self.tunnel_count, self)
     }
@@ -36,20 +34,19 @@ impl Engine {
     }
 }
 
-pub struct Tunnel<'a, const N: usize> {
+pub struct Tunnel<'a> {
     id: u16,
     engine: &'a Engine,
-    secret_state: SecretState,
+    secret_state: TunnelState,
 }
 
-impl<'a, const N: usize> Tunnel<'a, N> {
-    fn new(id: u16, engine: &'a Engine) -> Tunnel<N> {
-        let private = EphemeralSecret::new(rand_core::OsRng);
-        let foo = PublicKey::from(&private);
+impl<'a> Tunnel<'a> {
+    fn new(id: u16, engine: &'a Engine) -> Tunnel {
+        let private = StaticSecret::new(rand_core::OsRng);
         Tunnel {
             id,
             engine,
-            secret_state: SecretState::Waiting,
+            secret_state: TunnelState::NeedCertificate,
         }
     }
 
@@ -58,33 +55,54 @@ impl<'a, const N: usize> Tunnel<'a, N> {
             return;
         };
         match (message, &mut self.secret_state) {
-            (TunnelMessage::PublicKey(public), SecretState::Ready(foo)) => {
-                let state = std::mem::replace(&mut self.secret_state, SecretState::Waiting);
+            (TunnelMessage::PublicKey(public), TunnelState::Waiting(ephemeral_secret)) => {
+                let shared_secret = ephemeral_secret.diffie_hellman(&public);
+                self.secret_state = TunnelState::Established(shared_secret);
             }
-            (TunnelMessage::NeedPublicKey, _) => todo!(),
             (TunnelMessage::Packet(_), _) => todo!(),
             (_, _) => todo!(),
         }
         todo!()
     }
 
-    pub fn get_packet(&self) -> [u8; N * 32] {
+    pub fn get_packet(&self) -> Vec<u8> {
         todo!()
     }
 }
 
-enum SecretState {
-    Waiting,
-    Ready(EphemeralSecret),
+enum TunnelState {
+    NeedCertificate,
+    Waiting(StaticSecret),
     Established(SharedSecret),
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum TunnelMessage {
+    Certificate(Vec<u8>),
     PublicKey(PublicKey),
-    NeedPublicKey,
     Packet(Vec<u8>),
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 struct EngineConnection<'a> {
     engine: &'a Engine,

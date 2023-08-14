@@ -68,6 +68,7 @@ impl Settings {
     }
 
     pub async fn create_save(&self) -> Result<Save> {
+        tracing::info!("Creating new save");
         let save_root = get_new_root(Root::Saves).await?;
         let save_path = save_root.join("save.zip");
         let command_res = Command::new(format!("{}/bin/x64/factorio", CONFIG.factorio_path))
@@ -102,7 +103,7 @@ async fn get_new_root(root: Root) -> Result<PathBuf> {
         Root::Settings => "settings",
         Root::Saves => "saves",
     };
-    let settings_root = PathBuf::new().join(&format!(
+    let settings_root = PathBuf::new().join(format!(
         "{}/{}/{}/",
         CONFIG.factorio_path,
         root_type,

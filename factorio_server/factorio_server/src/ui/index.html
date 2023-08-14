@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Factorio Server</title>
+    <link rel="stylesheet" href="ui/style.css" />
+    <style>
+      .server_settings {
+        display: grid;
+        grid-template-columns: min-content 300px;
+        grid-template-rows: auto;
+        grid-gap: 0.5em;
+        margin: 0.5em;
+      }
+    </style>
+    <script
+      src="https://unpkg.com/htmx.org@1.9.4"
+      integrity="sha384-zUfuhFKKZCbHTY6aRR46gxiqszMk5tcHjsVFxnUo8VMus4kHGVdIYVbOYYNlKmHV"
+      crossorigin="anonymous"
+    ></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
+  </head>
+  <body></body>
+  <div hx-get="/ui/server_settings.html" hx-trigger="load" />
+</html>

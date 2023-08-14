@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Default)]
 pub struct ServerSettings {
     name: String,
     description: String,
@@ -31,8 +31,8 @@ pub struct ServerSettings {
     maximum_segment_size_peer_count: usize,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Default)]
 struct Visibility {
-    lic: bool,
+    public: bool,
     lan: bool,
 }

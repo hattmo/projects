@@ -8,6 +8,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = "1"
 axum = { version = "0.6", features = ["headers"] }
+base64 = "0.21"
 clap = { version = "4", features = ["derive", "env"] }
 http = "0.2"
 http-serde = "1"
