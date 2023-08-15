@@ -20,9 +20,8 @@ source "vsphere-iso" "arch-base" {
   convert_to_template = false
 
   CPUs      = 4
-  cpu_cores = 1
+  cpu_cores = 4
   RAM       = 32768
-
 
   network_adapters {
     network_card = "vmxnet3"
@@ -35,11 +34,12 @@ source "vsphere-iso" "arch-base" {
   }
   guest_os_type = "other4xLinuxGuest"
 
-  iso_url      = "https://geo.mirror.pkgbuild.com/iso/2023.03.01/archlinux-2023.03.01-x86_64.iso"
-  iso_checksum = "816758ba8fd8a06dff539b9af08eb8100c8bad526ac19ef4486bce99cd3ca18c"
+  iso_url      = "https://geo.mirror.pkgbuild.com/iso/2023.09.01/archlinux-2023.09.01-x86_64.iso"
+  iso_checksum = "0d71c9bc56af75c07e89cd41eaa5570ac914677ad6bc8e84935dc720ce58f960"
 
   boot_wait = "1s"
   boot_command = [
+    "e",
     "<tab><wait2>",
     " ds=nocloud",
     "<enter>"
@@ -47,7 +47,7 @@ source "vsphere-iso" "arch-base" {
   shutdown_command = "sudo shutdown -h now"
 
   floppy_content = {
-    "user-data" = "#cloud-config\n\npassword: password\nchpasswd: { expire: False }\nssh_pwauth: True\n",
+    "user-data" = file("./user-data.pktpl.hcl"),
     "meta-data" = ""
   }
   floppy_label = "cidata"
@@ -64,16 +64,16 @@ build {
   sources = [
     "source.vsphere-iso.arch-base"
   ]
+
   provisioner "file" {
-    source      = "fdisk_script"
-    destination = "~/fdisk_script"
-  }
-  provisioner "file" {
-    source      = "provision.sh"
-    destination = "~/provision.sh"
+    sources      = ["provision.sh", "fdisk_script", "in_chroot.sh", "loader.conf","arch.conf"]
+    destination = "/home/arch/"
   }
   provisioner "shell" {
     inline = ["chmod +x ~/provision.sh", "sudo ~/provision.sh"]
+  }
+  provisioner "breakpoint" {
+    disable = false
   }
 }
 

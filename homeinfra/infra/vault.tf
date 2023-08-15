@@ -19,3 +19,4 @@ resource "vsphere_virtual_machine" "vm" {
   }
   folder = vsphere_folder.infra.path
 }
+ 

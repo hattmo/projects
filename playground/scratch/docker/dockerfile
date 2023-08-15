@@ -1,0 +1,3 @@
+FROM scratch
+ADD ./busybox /bin/sh
+ENTRYPOINT [ "/bin/sh" ]
