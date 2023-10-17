@@ -36,7 +36,7 @@
         "express": "^4.17.1",
         "google-auth-library": "^7.10.2",
         "googleapis": "^92.0.0",
-        "mongodb": "^4.2.1",
+        "mongodb": "^4.17.0",
         "uuid": "^8.3.2"
     }
 }
