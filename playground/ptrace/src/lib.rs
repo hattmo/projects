@@ -1,6 +1,5 @@
 #![feature(iter_array_chunks)]
 use nix::{
-    errno::Errno,
     libc::user_regs_struct,
     sys::{
         ptrace::{self, Options},
@@ -76,7 +75,7 @@ impl TracedProcessGuard<'_> {
     fn write_memory(&self, addr: u64, data: &[u8]) -> Result<()> {
         let addr = addr as *mut c_void;
 
-        let data_iter = data.into_iter().map(|i| *i);
+        let data_iter = data.iter().copied();
         let mut missing = 8 - (data.len() % 8);
         if missing == 8 {
             missing = 0;
