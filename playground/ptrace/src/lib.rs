@@ -103,30 +103,14 @@ impl TracedProcessGuard<'_> {
 #[cfg(test)]
 mod test {
     use crate::TracedProcess;
-    use nix::{errno::Errno, unistd::Pid, Result};
+    use nix::{errno::Errno, libc::user_regs_struct, unistd::Pid, Result};
 
     #[test]
     fn test() -> Result<()> {
-        let args = std::env::args().collect::<Vec<_>>();
-        let pid = args
-            .get(1)
-            .ok_or_else(|| {
-                println!("Not enough args");
-                Errno::UnknownErrno
-            })?
-            .parse()
-            .or(Err(Errno::UnknownErrno))?;
-        let shellcode = std::fs::read("src/shellcode").unwrap();
-        let mut tracee = TracedProcess::seize(Pid::from_raw(pid))?;
-        {
-            let tracee_session = tracee.interrupt()?;
-            let regs = tracee_session.get_regs()?;
-            // regs.rax = 0x3c;
-            // regs.rdi = 42;
-            // let data = [0x0f, 0x05];
-            // tracee_session.set_regs(regs)?;
-            tracee_session.write_memory(regs.rip, &shellcode)?;
-        }
+        let mut trace = TracedProcess::seize(Pid::from_raw(1))?;
+        let foo = trace.interrupt()?;
+        let mut regs = foo.get_regs()?;
+        foo.set_regs(regs);
         Ok(())
     }
 }
