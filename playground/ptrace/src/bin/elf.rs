@@ -8,17 +8,23 @@ trait SliceOffset<T> {
 }
 impl<T> SliceOffset<T> for Vec<T> {
     fn slice_offset(&self, offset: usize, size: usize) -> &[T] {
-        return &self[offset..offset + size];
+        &self[offset..offset + size]
     }
 }
 
-struct Bytes<'a>(&'a [u8]);
+struct Bytes<T>(T)
+where
+    T: AsRef<[u8]>;
 
-impl<'a> Display for Bytes<'a> {
+impl<T> Display for Bytes<T>
+where
+    T: AsRef<[u8]>,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inner = self
             .0
-            .into_iter()
+            .as_ref()
+            .iter()
             .map(|c| {
                 if c.is_ascii_alphanumeric() {
                     format!("{}", char::from(*c))
