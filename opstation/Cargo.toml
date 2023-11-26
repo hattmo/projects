@@ -1,5 +1,5 @@
 [package]
-name = "docker_playground"
+name = "ops_containers"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.149"
+rustls = "0.21.9"

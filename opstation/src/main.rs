@@ -1,6 +1,6 @@
 // const STACK_SIZE: usize = 10 * 1024 * 1024;
 
-use docker_playground::create_container;
+use ops_containers::create_container;
 
 fn main() {
     match create_container("/bin/bash", &[], "") {

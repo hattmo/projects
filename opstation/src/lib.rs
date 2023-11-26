@@ -105,7 +105,6 @@ pub fn create_container(cmd: &str, args: &[&str], _image: &str) -> Result<i32, C
 unsafe fn create_tun() -> c_int{
     let fd = open(CLITER(b"/dev/net/tun\0").as_ptr(), O_RDWR);
     if fd < 0 {
-        println!("Failed to open tun device");
         exit(-1)
     };
     let mut name = [0i8; IFNAMSIZ];
