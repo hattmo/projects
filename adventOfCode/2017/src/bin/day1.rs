@@ -19,24 +19,22 @@ fn part_1(input: &str) -> i32 {
         .circular_tuple_windows()
         .map(|(this, next)| {
             if this == next {
-                return this.to_digit(10).unwrap().try_into().unwrap();
+                this.to_digit(10).unwrap().try_into().unwrap()
             } else {
                 0i32
             }
         })
-        .sum::<i32>()
-        .try_into()
-        .unwrap()
+        .sum()
 }
 fn part_2(input: &str) -> i32 {
     let chars = input.trim().chars().collect_vec();
     let left = &chars[..chars.len() / 2];
     let right = &chars[chars.len() / 2..chars.len()];
-    left.into_iter()
-        .zip(right.into_iter())
+    left.iter()
+        .zip(right)
         .map(|(left, right)| {
             if left == right {
-                return left.to_digit(10).unwrap().try_into().unwrap();
+                left.to_digit(10).unwrap().try_into().unwrap()
             } else {
                 0i32
             }
