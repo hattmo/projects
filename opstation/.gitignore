@@ -1,2 +1,7 @@
 /target
-/ubuntu
+/os
+/upper
+/work
+/merged
+*.img
+.cargo
