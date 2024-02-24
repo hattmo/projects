@@ -1,4 +1,5 @@
 #!/bin/bash
+git fetch --all
 for BRANCH in $(git branch -a | grep origin/dependabot | cut -d '/' -f 3-)
 do
     git switch $BRANCH
@@ -14,4 +15,3 @@ do
     git branch -d $BRANCH
 done
 git rebase -i origin/main
-git push

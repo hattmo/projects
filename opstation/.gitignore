@@ -1,7 +1,4 @@
 /target
-/os
-/upper
-/work
-/merged
+/root
 *.img
 .cargo
