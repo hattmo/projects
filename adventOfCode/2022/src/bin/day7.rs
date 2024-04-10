@@ -24,7 +24,7 @@ impl Directory {
         for index in self.children.iter().map(|(_, index)| index) {
             out += dirs.get(*index).unwrap().dir_size(dirs);
         }
-        return out;
+        out
     }
 }
 fn parse_dirs(input: &str) -> Vec<Directory> {
@@ -36,7 +36,7 @@ fn parse_dirs(input: &str) -> Vec<Directory> {
     });
     let mut on_index = 0;
     for line in input.lines().map(str::trim) {
-        match line.split(" ").collect_vec()[..] {
+        match line.split(' ').collect_vec()[..] {
             ["$", "cd", "/"] => {
                 on_index = 0;
             }

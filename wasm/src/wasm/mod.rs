@@ -1,4 +1,5 @@
 mod instructions;
+
 use instructions::{basic, control_flow, integer_arithmetic};
 
 #[derive(Debug, Copy, Clone)]
@@ -7,6 +8,17 @@ pub enum DataTypes {
     I64(i64),
     F32(f32),
     F64(f64),
+    Label,
+}
+
+#[derive(Default)]
+pub struct Store {
+    funcs: Vec<WasmFunc>,
+    tables: Vec<u8>,
+    mems: Vec<u8>,
+    globals: Vec<u8>,
+    elems: Vec<u8>,
+    datas: Vec<u8>,
 }
 
 #[derive(Debug)]
@@ -19,21 +31,19 @@ struct State {
 impl State {
     fn new(local_size: usize, params: &[DataTypes]) -> State {
         let mut local = vec![DataTypes::I32(0); local_size];
-        let mut i = 0;
-        for elem in params {
+        for (i, elem) in params.iter().enumerate() {
             local[i] = *elem;
-            i = i + 1;
         }
         State {
             ip: 0,
             stack: Vec::new(),
-            local: local,
+            local,
         }
     }
 }
 
 trait Executable {
-    fn exec(&self, state: &mut State) -> Result<(), &str>;
+    fn exec(&self, state: &mut State, store: &Store) -> Result<(), &str>;
 }
 
 pub struct WasmFunc {
@@ -45,7 +55,7 @@ impl WasmFunc {
     pub fn new(local_size: usize) -> WasmFunc {
         WasmFunc {
             instructions: Vec::new(),
-            local_size: local_size,
+            local_size,
         }
     }
 
@@ -62,37 +72,35 @@ impl WasmFunc {
     }
 
     pub fn i32const(&mut self, val: i32) -> &mut WasmFunc {
-        self.instructions
-            .push(Box::new(basic::I32Const { val: val }));
+        self.instructions.push(Box::new(basic::I32Const { val }));
         self
     }
 
     pub fn i64const(&mut self, val: i64) -> &mut WasmFunc {
-        self.instructions
-            .push(Box::new(basic::I64Const { val: val }));
+        self.instructions.push(Box::new(basic::I64Const { val }));
         self
     }
 
     pub fn local_set(&mut self, id: usize) -> &mut WasmFunc {
-        self.instructions.push(Box::new(basic::LocalSet { id: id }));
+        self.instructions.push(Box::new(basic::LocalSet { id }));
         self
     }
 
     pub fn local_get(&mut self, id: usize) -> &mut WasmFunc {
-        self.instructions.push(Box::new(basic::LocalGet { id: id }));
+        self.instructions.push(Box::new(basic::LocalGet { id }));
         self
     }
 
     pub fn cond_jump(&mut self, dst: usize) {
         self.instructions
-            .push(Box::new(control_flow::CondJump { dst: dst }))
+            .push(Box::new(control_flow::CondJump { dst }))
     }
 
-    pub fn exec(&mut self, params: &[DataTypes]) -> Result<(), &str> {
+    pub fn exec(&self, params: &[DataTypes], store: &Store) -> Result<(), &str> {
         let mut state = State::new(self.local_size, params);
         let len = self.instructions.len();
         while state.ip < len {
-            self.instructions[state.ip].exec(&mut state)?;
+            self.instructions[state.ip].exec(&mut state, store)?;
         }
         print!("{:?}", state);
         Ok(())

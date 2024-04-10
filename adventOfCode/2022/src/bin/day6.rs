@@ -14,7 +14,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn part_1(input: &str) -> usize {
     input
         .chars()
-        .into_iter()
         .tuple_windows()
         .enumerate()
         .find_map(|(index, (first, second, third, fourth))| {
@@ -30,12 +29,11 @@ fn part_1(input: &str) -> usize {
 fn part_2(input: &str) -> usize {
     input
         .chars()
-        .into_iter()
         .collect_vec()
         .array_windows::<14>()
         .enumerate()
         .find_map(|(index, windows)| {
-            if windows.into_iter().all_unique() {
+            if windows.iter().all_unique() {
                 Some(index + 14)
             } else {
                 None

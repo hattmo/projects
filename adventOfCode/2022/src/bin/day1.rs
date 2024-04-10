@@ -14,15 +14,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 fn part_1(input: &str) -> i32 {
     input
         .lines()
-        .into_iter()
         .map(str::trim)
-        .group_by(|item| *item != "")
+        .group_by(|item| !item.is_empty())
         .into_iter()
         .filter(|(group, val)| *group)
         .map(|(_, group)| group.map(|i| i.parse::<i32>().unwrap()).sum::<i32>())
-        .sorted()
-        .rev()
-        .next()
+        .sorted().next_back()
         .unwrap()
 }
 fn part_2(input: &str) -> i32 {

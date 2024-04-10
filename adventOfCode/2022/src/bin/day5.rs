@@ -25,7 +25,7 @@ fn part_1(input: &str) -> String {
                 if item == ' ' {
                     return;
                 }
-                let entry = stacks.entry(i + 1).or_insert(Vec::new());
+                let entry = stacks.entry(i + 1).or_default();
                 entry.insert(0, item);
             });
     }
@@ -50,9 +50,7 @@ fn part_1(input: &str) -> String {
     entries.sort_by_key(|(key, _)| *key);
     let result = entries
         .into_iter()
-        .map(|(_, val)| val.last().copied())
-        .filter(|item| item.is_some())
-        .map(|item| item.unwrap())
+        .filter_map(|(_, val)| val.last().copied())
         .collect::<String>();
     result
 }
@@ -70,7 +68,7 @@ fn part_2(input: &str) -> String {
                 if item == ' ' {
                     return;
                 }
-                let entry = stacks.entry(i + 1).or_insert(Vec::new());
+                let entry = stacks.entry(i + 1).or_default();
                 entry.insert(0, item);
             });
     }
@@ -93,9 +91,7 @@ fn part_2(input: &str) -> String {
     entries.sort_by_key(|(key, _)| *key);
     let result = entries
         .into_iter()
-        .map(|(_, val)| val.last().copied())
-        .filter(|item| item.is_some())
-        .map(|item| item.unwrap())
+        .filter_map(|(_, val)| val.last().copied())
         .collect::<String>();
     result
 }

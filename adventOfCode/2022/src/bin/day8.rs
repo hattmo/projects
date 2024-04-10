@@ -142,16 +142,20 @@ fn part_2(input: &str) -> i32 {
         .unwrap()
 }
 
-const TEST_DATA: &str = r#"30373
-25512
-65332
-33549
-35390"#;
+fn pause() {
+    let std_in = std::io::stdin();
+    let mut input = String::new();
+    std_in.read_line(&mut input).unwrap();
+}
 
 #[cfg(test)]
 mod test {
-    use crate::{part_1, part_2, TEST_DATA};
-
+    use crate::{part_1, part_2};
+    const TEST_DATA: &str = r#"30373
+    25512
+    65332
+    33549
+    35390"#;
     #[test]
     fn test1() {
         let expected = 21;
@@ -165,10 +169,4 @@ mod test {
         let actual = part_2(TEST_DATA);
         assert_eq!(expected, actual);
     }
-}
-
-fn pause() {
-    let std_in = std::io::stdin();
-    let mut input = String::new();
-    std_in.read_line(&mut input).unwrap();
 }
