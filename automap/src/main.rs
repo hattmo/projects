@@ -17,7 +17,7 @@ use std::{
     io::{self, Error, ErrorKind, Result},
     sync::LazyLock,
 };
-use tokio::{fs::read, process::Command, sync::RwLock};
+use tokio::{fs::read, net::TcpListener, process::Command, sync::RwLock};
 
 static LAST_SCAN: LazyLock<RwLock<ScanResult>> =
     LazyLock::new(|| RwLock::new(ScanResult::default()));
@@ -38,31 +38,36 @@ async fn web_job() {
             guard.to_string()
         }),
     );
-
-    axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
-        .serve(app.into_make_service())
+    let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }
 
 async fn scan_job() -> Result<()> {
     let target_env = env::var("TARGET").or(Err(io::Error::other("No target set")))?;
-    let targets: Vec<_> = target_env.split(' ').map(ToString::to_string).collect();
+    let targets: Vec<_> = target_env
+        .split(' ')
+        .map(str::trim)
+        .map(ToString::to_string)
+        .collect();
     loop {
         println!("Starting scan at {}", Local::now());
-        let res = Command::new("nmap")
+        println!("nmap -vvv -A -T1 --unprivileged -oX scan.xml {target_env}");
+        let mut command = Command::new("nmap");
+        command
             .arg("-vvv")
             .arg("-A")
+            .arg("-T1")
             .arg("--unprivileged")
             .arg("-oX")
             .arg("scan.xml")
-            .args(targets.clone())
-            .status()
-            .await?;
+            .args(targets.clone());
+        let res = command.status().await?;
         if !res.success() {
-            println!("Scan failed with status: {}", res);
+            println!("Scan failed with status: {res}");
         } else if let Err(e) = parse_xml().await {
-            println!("Error parsing XML: {}", e);
+            println!("Error parsing XML: {e}");
         };
         println!("Done scanning, sleeping for 1 hour");
         tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
