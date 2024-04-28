@@ -1,4 +1,6 @@
-pub mod parser;
+#[allow(dead_code)]
+mod parser;
+
 //mod wasm;
 //pub use self::wasm::WasmFunc;
 
