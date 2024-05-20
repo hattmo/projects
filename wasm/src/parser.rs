@@ -4,13 +4,14 @@ use nom::{
     branch::alt,
     bytes::streaming::tag,
     combinator::{map, map_res, value},
-    multi::length_data,
+    multi::{length_count, length_data},
+    number::{streaming, Endianness},
     sequence::{preceded, tuple},
     IResult,
 };
 
 pub fn byte(input: &[u8]) -> IResult<&[u8], u8> {
-    nom::number::streaming::u8(input)
+    streaming::u8(input)
 }
 
 pub fn leb_u32(mut input: &[u8]) -> IResult<&[u8], u32> {
@@ -82,10 +83,10 @@ pub fn leb_i64(mut input: &[u8]) -> IResult<&[u8], i64> {
 }
 
 pub fn f32(input: &[u8]) -> IResult<&[u8], f32> {
-    nom::number::streaming::f32(nom::number::Endianness::Little)(input)
+    streaming::f32(Endianness::Little)(input)
 }
 pub fn f64(input: &[u8]) -> IResult<&[u8], f64> {
-    nom::number::streaming::f64(nom::number::Endianness::Little)(input)
+    streaming::f64(Endianness::Little)(input)
 }
 
 pub fn name(input: &[u8]) -> IResult<&[u8], &str> {
@@ -150,7 +151,7 @@ pub fn value_type(input: &[u8]) -> IResult<&[u8], ValueType> {
 }
 
 pub fn result_type(input: &[u8]) -> IResult<&[u8], Vec<ValueType>> {
-    nom::multi::length_count(leb_u32, value_type)(input)
+    length_count(leb_u32, value_type)(input)
 }
 
 pub struct FuntionType {
@@ -222,6 +223,12 @@ pub struct GlobalType {
 
 pub fn global_type(input: &[u8]) -> IResult<&[u8], GlobalType> {
     map(tuple((value_type, mutable)), |(t, m)| GlobalType { m, t })(input)
+}
+
+enum Instruction {
+    Unreachable,
+    Nop,
+    Block(Vec<Instruction>),
 }
 
 #[cfg(test)]
