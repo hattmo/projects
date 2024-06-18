@@ -1,4 +1,4 @@
-use std::u8;
+use std::{alloc::Global, u8};
 
 use nom::{
     branch::alt,
@@ -92,6 +92,7 @@ pub fn f64(input: &[u8]) -> IResult<&[u8], f64> {
 pub fn name(input: &[u8]) -> IResult<&[u8], &str> {
     map_res(length_data(leb_u32), std::str::from_utf8)(input)
 }
+
 #[allow(non_camel_case_types)]
 #[derive(Clone)]
 pub enum NumberType {
@@ -225,15 +226,49 @@ pub fn global_type(input: &[u8]) -> IResult<&[u8], GlobalType> {
     map(tuple((value_type, mutable)), |(t, m)| GlobalType { m, t })(input)
 }
 
+enum BlockType {
+    Empty,
+    Val(ValueType),
+    Index(u32),
+}
+
 enum Instruction {
+    Control(Control),
+    Reference,
+    Parametric,
+    Variable,
+    Table,
+    Memory,
+    Numeric,
+    Vector,
+}
+
+pub fn instruction(input: &[u8]) -> IResult<&[u8], Instruction> {
+    todo!()
+}
+
+enum Control {
     Unreachable,
     Nop,
-    Block(Vec<Instruction>),
+    Block(BlockType, Vec<Instruction>),
+    Loop(BlockType, Vec<Instruction>),
+    If(BlockType, Vec<Instruction>),
+    IfElse(BlockType, Vec<Instruction>, Vec<Instruction>),
+    Branch(u32),
+    BranchIf(u32),
+    BranchTable(Vec<u32>, u32),
+    Return,
+    Call(u32),
+    CallIndirect(u32, u32),
+}
+
+pub fn control(input: &[u8]) -> IResult<&[u8], Control> {
+    todo!()
 }
 
 #[cfg(test)]
 mod test {
-    use super::{leb_i32, leb_i64};
+    use super::*;
 
     #[test]
     fn test_lebi32() {
