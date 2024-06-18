@@ -130,16 +130,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
-name = "cstr"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8aa998c33a6d3271e3678950a22134cd7dd27cef86dee1b611b5b14207d1d90b"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
 name = "env_logger"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -253,7 +243,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "cstr",
  "env_logger",
  "libc",
  "log",

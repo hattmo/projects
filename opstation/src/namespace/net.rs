@@ -1,9 +1,8 @@
-use cstr::cstr;
 use libc::{__c_anonymous_ifr_ifru, c_int, exit, ifreq, ioctl, open, IFF_TUN, IFNAMSIZ, O_RDWR};
 
 pub fn create_tun() -> c_int {
     unsafe {
-        let fd = open(cstr!("/dev/net/tun").as_ptr(), O_RDWR);
+        let fd = open(c"/dev/net/tun".as_ptr(), O_RDWR);
         if fd < 0 {
             exit(-1)
         };
