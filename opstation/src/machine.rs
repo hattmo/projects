@@ -1,12 +1,13 @@
 use anyhow::{bail, Result};
-use libc::ioctl;
-use nix::mount::{mount, umount, MsFlags};
+use libc::{ioctl, mount};
 use std::{
+    ffi::CString,
     fs::{self, OpenOptions},
     io::Error,
     os::fd::AsRawFd,
     path::{Path, PathBuf},
     process::Child,
+    ptr,
 };
 
 #[derive(Debug)]
@@ -28,23 +29,23 @@ impl Machine {
             .create(true)
             .open("/dev/loop-control")?;
         let open_ld = unsafe { ioctl(lc.as_raw_fd(), 0x4C82) };
-        let loop_path: PathBuf = format!("/dev/loop{}", open_ld).into();
+        let loop_path = format!("/dev/loop{}", open_ld);
         let loop_device = OpenOptions::new()
             .write(true)
             .create(true)
-            .open(&loop_path)?;
+            .open(loop_path)?;
         let image = OpenOptions::new().write(true).read(true).open(image_path)?;
         let set_fd_result = unsafe { ioctl(loop_device.as_raw_fd(), 0x4C00, image.as_raw_fd()) };
         if set_fd_result != 0 {
             bail!("failed to set fd")
         };
         mount(
-            Some(&loop_path),
             &machine_path.join("image"),
-            Some("ext4"),
-            MsFlags::MS_RDONLY,
-            Option::<&str>::None,
-        )?;
+            Some(&loop_path),
+            c"ext4".as_ptr(),
+            libc::MS_RDONLY,
+            ptr::null(),
+        );
         mount(
             Some("overlay"),
             &machine_path.join("root"),

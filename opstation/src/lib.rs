@@ -1,11 +1,12 @@
+#![feature(lazy_cell)]
 pub mod namespace;
+mod raw;
+
 use anyhow::{bail, Result};
-use cstr::cstr;
 use libc::{
     c_char, chdir, chroot, execve, exit, fork, unshare, waitpid, CLONE_NEWIPC, CLONE_NEWNET,
     CLONE_NEWNS, CLONE_NEWPID, CLONE_NEWUTS,
 };
-
 use namespace::{mount::setup_mounts, net::create_tun};
 use std::{
     ffi::{CString, NulError},
@@ -65,11 +66,11 @@ pub fn create_container(cmd: &str, args: &[&str], _image: &str) -> Result<i32> {
 
 fn setup_root() -> Result<()> {
     unsafe {
-        let ret = chdir(cstr!("./merged").as_ptr());
+        let ret = chdir(c"./merged".as_ptr());
         if ret < 0 {
             bail!("chdir failed")
         };
-        let ret = chroot(cstr!("./").as_ptr());
+        let ret = chroot(c"./".as_ptr());
         if ret < 0 {
             bail!("chroot failed")
         };
