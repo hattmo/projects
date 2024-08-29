@@ -1,11 +1,11 @@
-use std::{
-    cell::{Cell, RefCell},
-    ops::Deref,
-    rc::Rc,
-};
-mod vsphere {
+use std::collections::HashMap;
 
+mod vsphere {}
+
+struct Resource {
+    fields: HashMap<String, Box<dyn Res>
 }
+
 pub struct VSphere {
     resources: Vec<Box<dyn Build>>,
 }
@@ -30,11 +30,11 @@ impl Build for VM {
 }
 
 pub struct VMConfig {
-    pub name: BoundString,
+    pub name: Box<dyn Resolve<str>>,
 }
 
 impl VSphere {
-    pub fn new() -> Self {
+    pub fn new(username: &str, password: &str) -> Self {
         VSphere {
             resources: Vec::new(),
         }
@@ -45,34 +45,28 @@ impl VSphere {
     }
 
     pub fn build(self) {
-        for item in self.resources {
-            let _ = item.build();
+        let mut done = false;
+        while !done {
+            for item in self.resources {
+                let _ = item.build();
+            }
         }
     }
 }
 
-trait Resolve<T: ?Sized> {
+pub trait Resolve<T: ?Sized> {
     fn resolve(&self) -> Option<&T>;
 }
 
-pub struct BoundString {
-    inner: Rc<RefCell<Option<String>>>,
-}
-
-impl<T> From<T> for BoundString
-where
-    T: ToString,
-{
-    fn from(value: T) -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(Some(value.to_string()))),
-        }
+impl Resolve<str> for &'static str {
+    fn resolve(&self) -> Option<&str> {
+        Some(*self)
     }
 }
 
-impl Resolve<str> for BoundString {
+impl Resolve<str> for String {
     fn resolve(&self) -> Option<&str> {
-        self.
+        Some(self.as_str())
     }
 }
 
@@ -83,7 +77,7 @@ mod test {
     #[test]
     fn test() {
         VMConfig {
-            name: "hello".into(),
+            name: Box::new("hello"),
         };
     }
 }
