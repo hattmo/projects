@@ -4,11 +4,12 @@ cargo-features = ["per-package-target"]
 edition = "2021"
 name = "automap"
 version = "0.1.0"
-default-target = "x86_64-unknown-linux-musl"
 
 [dependencies]
 axum = "0.7"
 chrono = "0.4"
+clap = { version = "4", features = ["derive"] }
+parse_duration = "2"
 quick-xml = {version = "0.31", features = ["serde", "serialize", "serde-types", "overlapped-lists"]}
 serde = {version = "1", features = ["derive"]}
 tokio = {version = "1", features = ["full"]}

@@ -1,4 +1,4 @@
-FROM alpine:3.9.6
+FROM alpine:latest
 RUN apk add --no-cache nmap
 RUN apk add --no-cache nmap-scripts
 ADD target/x86_64-unknown-linux-musl/release/automap /automap
