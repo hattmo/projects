@@ -2,19 +2,18 @@ pub mod mount;
 pub mod net;
 
 use anyhow::{bail, Result};
-use cstr::cstr;
 use libc::{
     mount, unshare, CLONE_NEWIPC, CLONE_NEWNET, CLONE_NEWNS, CLONE_NEWPID, CLONE_NEWUTS, MS_NODEV,
     MS_NOEXEC, MS_NOSUID,
 };
 use mount::{setup_devices, setup_io_link, setup_mounts};
 use net::create_tun;
-use nix::unistd::chroot;
 use std::io::Error;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::ptr;
 use std::{env::current_dir, fs::create_dir_all};
+
 pub fn manager_main() -> Result<()> {
     unsafe {
         const NS_FLAGS: i32 =
@@ -33,8 +32,6 @@ pub fn manager_main() -> Result<()> {
         log::info!("devices");
         setup_io_link()?;
         log::info!("io link");
-        let _tun = create_tun()?;
-        log::info!("tun");
     }
     log::info!("starting init");
     let mut child = unsafe {

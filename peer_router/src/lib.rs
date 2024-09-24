@@ -1,207 +1,222 @@
-mod job;
-mod link;
-mod router;
-mod stream;
-mod tls;
-use std::{
-    collections::HashMap,
-    convert::Infallible,
-    sync::mpsc::{
-        channel,
-        TryRecvError::{Disconnected, Empty},
-    },
-    time::Duration,
+#![no_std]
+
+extern crate core;
+
+use aes_gcm::Aes128Gcm;
+
+use ed25519_dalek::{
+    ed25519::signature::SignerMut, Signature, SignatureError, SigningKey, VerifyingKey,
 };
 
-pub use job::{JobContext, JobError};
-pub use stream::Stream;
+use x25519_dalek::PublicKey;
 
-use job::{Job, JobMessage};
-use link::{Link, LinkContext, LinkMessage};
-use router::Router;
-use rustls::Connection;
-use tls::TlsFactory;
-
-pub struct Engine {
-    node_id: u64,
-    stale_time: Duration,
+enum LinkFrame<'a> {
+    Packet(DataPacket<'a>),
+    Authentication(AuthenticationPacket<'a>),
 }
 
-pub struct EngineConfig {
-    pub node_id: u64,
-    pub stale_time: Duration,
+pub struct DataPacket<'a> {
+    read: bool,
+    src: u64,
+    dst: u64,
+    hops: u8,
+    data: &'a mut [u8],
 }
 
-pub enum EngineError {
-    FailedToLoadCerts,
-}
-
-struct Addr {
-    pub node: u64,
-    pub job: u64,
-}
-
-struct Message {
-    pub from: Addr,
-    pub to: Addr,
-    pub stream: u16,
-    pub seq: u32,
-    pub ack: u32,
-    pub payload: Vec<u8>,
-}
-
-enum EngineMessage {
-    Message(Message),
-}
-impl Engine {
-    pub fn new(config: EngineConfig) -> Engine {
-        let EngineConfig {
-            node_id,
-            stale_time,
-        } = config;
-        Engine {
-            node_id,
-            stale_time,
+impl<'a> DataPacket<'a> {
+    fn new(buffer: &'a mut [u8]) -> Self {
+        Self {
+            read: false,
+            src: 0,
+            dst: 0,
+            hops: 0,
+            data: buffer,
         }
     }
-
-    pub fn start(mut self) -> Result<Infallible, EngineError> {
-        let mut jobs: HashMap<u64, Job> = HashMap::new();
-        let mut links: HashMap<u64, Link> = HashMap::new();
-        let mut streams: HashMap<u64, Stream> = HashMap::new();
-        let mut job_count = 0;
-        let mut link_count = 0;
-        let mut stream_count = 0;
-        let mut router = Router::new(self.stale_time);
-
-        let tls_factory = TlsFactory::new(
-            include_bytes!("../certs/ca.cert").to_vec(),
-            include_bytes!("../certs/server.cert").to_vec(),
-            include_bytes!("../certs/server.key").to_vec(),
-        )
-        .or(Err(EngineError::FailedToLoadCerts))?;
-
-        loop {
-            //
-            // Handle messages from jobs
-            //
-            let messages: Vec<(u64, JobMessage)> = jobs
-                .iter()
-                .filter_map(|(job_id, job)| match job.receiver.try_recv() {
-                    Ok(val) => Some((*job_id, val)),
-                    Err(Empty) => None,
-                    Err(Disconnected) => Some((*job_id, JobMessage::Kill)),
-                })
-                .collect();
-            for (job_id, message) in messages {
-                match message {
-                    JobMessage::Kill => {
-                        jobs.remove(&job_id);
-                    }
-                    JobMessage::NewJob(res) => {
-                        res.send(create_job(self.node_id, &mut jobs, &mut job_count))
-                            .unwrap();
-                    }
-                    JobMessage::ServerLink(res) => {
-                        let Ok(conn) = tls_factory.create_server() else {
-                            jobs.remove(&job_id);
-                            continue;
-                        };
-                        if let Err(e) = res.send(create_link(conn, &mut links, &mut link_count)) {
-                            jobs.remove(&job_id);
-                        };
-                    }
-                    JobMessage::ClientLink(res) => {
-                        let conn = tls_factory.create_client("Foobar").unwrap();
-                        res.send(create_link(conn, &mut links, &mut link_count))
-                            .unwrap();
-                    }
-                    JobMessage::Connect(node, job, res) => todo!(),
-                    JobMessage::Accept(res) => {
-                        todo!();
-                    }
-                };
-            }
-            //
-            // Handle messages from links
-            //
-            let messages: Vec<_> = links
-                .iter()
-                .filter_map(|(link_id, link)| match link.receiver.try_recv() {
-                    Ok(msg) => Some((*link_id, msg)),
-                    Err(Empty) => None,
-                    Err(Disconnected) => Some((*link_id, LinkMessage::Kill)),
-                })
-                .collect();
-            for (link_id, message) in messages {
-                match message {
-                    LinkMessage::Kill => {
-                        links.remove(&link_id);
-                    }
-                    LinkMessage::Message(msg) => {
-                        self.handle_message(msg);
-                    }
-                }
-            }
-            router.purge_routes();
-        }
-    }
-
-    fn handle_message(&mut self, mess: Message) {}
 }
 
-pub fn create_job(node_id: u64, jobs: &mut HashMap<u64, Job>, job_count: &mut u64) -> JobContext {
-    let (to_job, from_engine) = channel();
-    let (to_engine, from_job) = channel();
-    let job = *job_count;
-    *job_count += 1;
-    jobs.insert(
-        job,
-        Job {
-            sender: to_job,
-            receiver: from_job,
-        },
-    );
-    JobContext::new(node_id, job, to_engine, from_engine)
+pub struct AuthenticationPacket<'a> {
+    pub_key: &'a VerifyingKey,
+    sig: &'a Signature,
+    dh_key: &'a PublicKey,
+    dh_sig: &'a Signature,
 }
 
-fn create_link(
-    conn: Connection,
-    links: &mut HashMap<u64, Link>,
-    link_count: &mut u64,
-) -> LinkContext {
-    let (to_link, from_engine) = channel();
-    let (to_engine, from_link) = channel();
-    let link_id = *link_count;
-    *link_count += 1;
-    links.insert(
-        link_id,
-        Link {
-            sender: to_link,
-            receiver: from_link,
-        },
-    );
-    LinkContext::new(to_engine, from_engine, conn)
-use std::collections::{HashMap, VecDeque};
-use tunnel::Tunnel;
-mod tunnel;
+pub struct LinkHandle(usize);
 
-struct Engine {
-    node: u32,
-    buffers: HashMap<(u32, u32), VecDeque<u8>>,
-    tunnel_count: u16,
+enum LinkState {
+    Authenticating(VerifyingKey, SigningKey),
+    Sharing(),
+    Up(Aes128Gcm),
+    Dead,
 }
 
-impl Engine {
-    pub fn new(node: u32) -> Engine {
-        Engine {
-            node,
-            buffers: HashMap::new(),
-            tunnel_count: 0,
-        }
-    }
+pub struct Link<'a> {
+    state: &'a mut LinkState,
+    out_packet: &'a mut DataPacket<'a>,
+    in_packet: &'a mut DataPacket<'a>,
+}
 
-    pub fn create_tunnel<const N: usize>(&mut self) -> Tunnel<N> {
-        self.tunnel_count += 1;
+impl<'a> Link<'a> {
+    pub fn push_data(&mut self, in_buf: &[u8]) {
         todo!()
+    }
+    pub fn pull_data(&mut self, out_buf: &mut [u8]) {
+        match self.state {
+            LinkState::Authenticating(verify, sign) => {
+                let public = sign.verifying_key();
+                let res = sign.sign(public.as_bytes());
+                *self.state = LinkState::Dead;
+            }
+            LinkState::Sharing() => todo!(),
+            LinkState::Up(_) => todo!(),
+            LinkState::Dead => todo!(),
+        }
+        todo!()
+    }
+}
+
+struct Route {
+    to: u64,
+    via: u8,
+    hops: u8,
+}
+
+impl Route {
+    fn new(dst: u64, via: u8, hops: u8) -> Self {
+        Self { to: dst, via, hops }
+    }
+}
+
+pub struct Router<'a> {
+    cert: SigningKey,
+    ca: VerifyingKey,
+    id: u64,
+    route_table: [Option<Route>; 128],
+    link_state: [Option<LinkState>; 32],
+    inbound_packets: [Option<DataPacket<'a>>; 32],
+    outbound_packets: [Option<DataPacket<'a>>; 32],
+}
+
+pub enum RouterError {
+    SignatureError(SignatureError),
+}
+
+impl From<SignatureError> for RouterError {
+    fn from(value: SignatureError) -> Self {
+        RouterError::SignatureError(value)
+    }
+}
+
+struct CreateLinkError;
+
+impl<'a> Router<'a> {
+    pub fn new(
+        id: u64,
+        key: &[u8; 64],
+        sig: &[u8; 64],
+        ca: &[u8; 32],
+    ) -> Result<Self, RouterError> {
+        let cert = SigningKey::from_keypair_bytes(key)?;
+        let ca = VerifyingKey::from_bytes(ca)?;
+        let sig = Signature::from_bytes(sig);
+        Result::Ok(Self {
+            id,
+            cert,
+            ca,
+            inbound_packets: [const { Option::None }; 32],
+            outbound_packets: [const { Option::None }; 32],
+            link_state: [const { Option::None }; 32],
+            route_table: [const { Option::None }; 128],
+        })
+    }
+
+    pub fn process(&mut self) {
+        for i in 0..self.inbound_packets.len() {
+            let Some(inbound) = &mut self.inbound_packets[i] else {
+                continue;
+            };
+            if inbound.read == true {
+                continue;
+            }
+
+            if inbound.dst == self.id {
+                todo!("handle arrived packets");
+            }
+            let Some(outbound) = &mut self.outbound_packets[0] else {
+                continue;
+            };
+
+            let routes = &mut self.route_table;
+            let dst = inbound.dst;
+            let src = inbound.src;
+            routes
+                .iter_mut()
+                .filter_map(|i| i.as_mut())
+                .filter(|i| i.to == dst);
+        }
+    }
+
+    pub fn create_link(&mut self, buffer: &'a mut [u8]) -> Result<LinkHandle, CreateLinkError> {
+        let (index, _) = self
+            .inbound_packets
+            .iter_mut()
+            .enumerate()
+            .find(|(_, i)| i.is_none())
+            .ok_or(CreateLinkError)?;
+        let (inbound_buffer, outbound_buffer) = buffer.split_at_mut(buffer.len() / 2);
+        self.inbound_packets[index] = Some(DataPacket::new(inbound_buffer));
+        self.outbound_packets[index] = Some(DataPacket::new(outbound_buffer));
+        Ok(LinkHandle(index))
+    }
+
+    pub fn bind_app(&mut self, app_id: u64) {
+        todo!()
+    }
+
+    pub fn get_link(&'a mut self, &LinkHandle(handle): &LinkHandle) -> Option<Link> {
+        let in_packet = self.inbound_packets[handle].as_mut()?;
+        let out_packet = self.outbound_packets[handle].as_mut()?;
+        let state = self.link_state[handle].as_mut()?;
+        Some(Link {
+            in_packet,
+            out_packet,
+            state,
+        })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use aes_gcm::{
+        aead::{consts::U12, AeadInPlace},
+        Aes256Gcm, Key, KeyInit, Nonce,
+    };
+
+    use crate::Router;
+
+    #[test]
+    fn foo() {
+        let mut buffer = [0u8; 1024];
+        let key = [0u8; 64];
+        let Ok(mut router) = Router::new(1337, &key, &key[..32].try_into().unwrap()) else {
+            return;
+        };
+        let Ok(link_token) = router.create_link(&mut buffer) else {
+            return;
+        };
+        let Some(link) = router.get_link(&link_token) else {
+            return;
+        };
+        let key: &Key<Aes256Gcm> = &[0; 32].into();
+        let nonce: Nonce<U12> = [0u8; 12].into();
+        let mut cipher = Aes256Gcm::new(key);
+        let mut inplace = [0u8; 100];
+        let tag = cipher
+            .encrypt_in_place_detached(&nonce, &[0], &mut inplace)
+            .unwrap();
+        let foo = cipher
+            .decrypt_in_place_detached(&nonce, &[0], &mut inplace, &tag)
+            .unwrap();
+    }
 }

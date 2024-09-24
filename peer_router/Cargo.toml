@@ -3,17 +3,7 @@ name = "peer_router"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-bincode = "1.3.3"
-<<<<<<< HEAD
-binrw = "0.13.3"
-oneshot = "0.1.6"
-rand = "0.8.5"
-=======
->>>>>>> cee1c5f (initial commit)
-rand_core = { version = "0.5.1", features = ["getrandom"] }
-rustls = "0.21.6"
-serde = { version = "1.0.180", features = ["derive"] }
-x25519-dalek = { version = "1.2.0", features = ["serde"] }
+aes-gcm = { version = "0.10.3", default-features = false, features = ["aes"] }
+ed25519-dalek = { version = "2.1.1", default-features = false }
+x25519-dalek = { version = "2.0.1", default-features = false, features = ["zeroize"] }

@@ -1,20 +1,27 @@
 use anyhow::Result;
-use nix::{
-    mount::{mount, MsFlags},
-    sys::stat::{makedev, mknod, Mode, SFlag},
+use libc::{
+    dev_t, makedev, mknod, mount, MS_NOEXEC, MS_STRICTATIME, S_IFCHR, S_IRGRP, S_IROTH, S_IRUSR,
+    S_IWGRP, S_IWOTH, S_IWUSR,
 };
-use std::{fs::create_dir_all, os::unix::fs::symlink, path::Path};
+use std::{
+    fs::create_dir_all,
+    mem,
+    os::unix::{fs::symlink, raw::mode_t},
+    path::Path,
+};
 
 pub fn setup_mounts() -> Result<()> {
     create_dir_all("/dev")?;
     log::info!("created dirs");
-    mount(
-        Some("tmpfs"),
-        "/dev",
-        Some("tmpfs"),
-        MsFlags::MS_NOEXEC | MsFlags::MS_STRICTATIME,
-        Some("mode=755"),
-    )?;
+    unsafe {
+        mount(
+            c"tmpfs",
+            c"/dev",
+            "tmpfs",
+            MS_NOEXEC | MS_STRICTATIME,
+            c"mode=755",
+        )
+    };
     log::info!("created tmpfs");
     create_dir_all("/dev/shm")?;
     mount(
@@ -58,15 +65,16 @@ pub fn setup_mounts() -> Result<()> {
 pub fn setup_devices() -> Result<()> {
     create_dir_all(Path::new("/dev/net"))?;
 
-    let perm = Mode::from_bits(0o666).unwrap();
-    mknod("/dev/null", SFlag::S_IFCHR, perm, makedev(1, 3))?;
-    mknod("/dev/zero", SFlag::S_IFCHR, perm, makedev(1, 5))?;
-    mknod("/dev/full", SFlag::S_IFCHR, perm, makedev(1, 7))?;
-    mknod("/dev/tty", SFlag::S_IFCHR, perm, makedev(5, 0))?;
-    mknod("/dev/ptmx", SFlag::S_IFCHR, perm, makedev(5, 2))?;
-    mknod("/dev/random", SFlag::S_IFCHR, perm, makedev(1, 8))?;
-    mknod("/dev/urandom", SFlag::S_IFCHR, perm, makedev(1, 9))?;
-    mknod("/dev/net/tun", SFlag::S_IFCHR, perm, makedev(10, 200))?;
+    let mode: mode_t = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+    unsafe {
+        mknod(c"/dev/null", S_IFCHR | mode, makedev(1, 3));
+        mknod(c"/dev/zero", S_IFCHR | mode, makedev(1, 5));
+        mknod(c"/dev/full", S_IFCHR | mode, makedev(1, 7));
+        mknod(c"/dev/random", S_IFCHR | mode, makedev(1, 8));
+        mknod(c"/dev/urandom", S_IFCHR | mode, makedev(1, 9));
+        mknod(c"/dev/tty", S_IFCHR | mode, makedev(5, 0));
+        mknod(c"/dev/ptmx", S_IFCHR | mode, makedev(5, 2));
+    }
 
     Ok(())
 }
