@@ -1,7 +1,0 @@
-.terraform*
-terraform.tfvars
-terraform.tfstate
-terraform.tfstate.backup
-.venv
-ubuntu_20.04.4.iso
-settings.conf

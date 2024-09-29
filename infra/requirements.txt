@@ -1,7 +1,0 @@
-
-# python library for interacting with hashicorp packer CLI executable.
-# https://github.com/mayn/packer.py 
-packer.py
-# wrapper of terraform command line tool
-# https://github.com/beelit94/python-terraform
-python_terraform
