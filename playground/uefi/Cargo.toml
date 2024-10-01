@@ -1,9 +1,0 @@
-[package]
-name = "uefi_test"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-acpi = "5.0.0"
-log = "0.4.21"
-uefi = { version = "0.28.0", features = ["logger", "alloc", "global_allocator", "panic_handler"] }
