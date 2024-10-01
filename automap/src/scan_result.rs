@@ -72,7 +72,7 @@ impl Display for ScanResult {
                 });
             let hostname_str = if let Some(ref hostnames) = host.hostnames {
                 if hostnames.hostname.is_empty() {
-                    "".to_string()
+                    String::new()
                 } else {
                     " (".to_string()
                         + &hostnames
@@ -84,7 +84,7 @@ impl Display for ScanResult {
                         + ")"
                 }
             } else {
-                "".to_string()
+                String::new()
             };
             results.push(format!(
                 "{}{}: {}",

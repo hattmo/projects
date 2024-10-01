@@ -21,7 +21,7 @@ use tokio::{fs::read, net::TcpListener, process::Command, sync::RwLock};
 
 static LAST_SCAN: LazyLock<RwLock<ScanResult>> =
     LazyLock::new(|| RwLock::new(ScanResult::default()));
-static ARGS: LazyLock<Arguments> = LazyLock::new(|| Arguments::parse());
+static ARGS: LazyLock<Arguments> = LazyLock::new(Arguments::parse);
 
 #[tokio::main]
 async fn main() -> IoResult<()> {
@@ -113,12 +113,12 @@ enum Timing {
 impl Timing {
     fn as_flag(&self) -> String {
         match self {
-            Timing::Paranoid => "-T0",
-            Timing::Sneaky => "-T1",
-            Timing::Polite => "-T2",
-            Timing::Normal => "-T3",
-            Timing::Aggressive => "-T4",
-            Timing::Insane => "-T5",
+            Self::Paranoid => "-T0",
+            Self::Sneaky => "-T1",
+            Self::Polite => "-T2",
+            Self::Normal => "-T3",
+            Self::Aggressive => "-T4",
+            Self::Insane => "-T5",
         }
         .to_owned()
     }
