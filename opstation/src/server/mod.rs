@@ -1,9 +1,10 @@
-use anyhow::Result;
-use std::path::Path;
+mod rootfs;
 
-use crate::machine::Machine;
+use rootfs::RootFS;
+use std::{io, path::Path};
 
-pub fn server_main() -> Result<()> {
-    let _machine = Machine::new(Path::new("./arch.img"))?;
+pub fn server_main() -> io::Result<()> {
+    let root_fs = RootFS::new(Path::new("./arch.img"))?;
+    root_fs.remove();
     Ok(())
 }

@@ -1,14 +1,14 @@
 #![feature(linux_pidfd)]
 
-use anyhow::Result;
 use clap::Parser;
 
 use manager::manager_main;
 use server::server_main;
 
-mod machine;
 mod manager;
+mod raw;
 mod server;
+mod util;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -16,19 +16,23 @@ struct Args {
     manager: bool,
 }
 
-fn main() -> Result<()> {
+fn main() {
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)
         .init();
-    let arg = Args::parse();
-    if arg.manager {
-        log::info!("starting manager");
-        manager_main()?;
-        log::info!("manager exited");
-    } else {
-        log::info!("starting server");
-        server_main()?;
-        log::info!("server exited");
-    }
-    Ok(())
+    match std::env::args().nth(0) {
+        Some(command) if command == "manager".to_owned() => {
+            log::info!("starting manager");
+            manager_main();
+            log::info!("manager exited");
+        }
+        Some(_) => {
+            log::info!("starting server");
+            server_main();
+            log::info!("server exited");
+        }
+        None => {
+            log::error!("invalid arguments")
+        }
+    };
 }
