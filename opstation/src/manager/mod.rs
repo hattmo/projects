@@ -1,34 +1,41 @@
-pub mod net;
+mod net;
+mod rootfs;
+
 use crate::raw::{chroot, mount, unshare};
 use crate::util::AsCString;
+use clap::Parser;
 use libc::{
     makedev, mknod, mode_t, CLONE_NEWIPC, CLONE_NEWNET, CLONE_NEWNS, CLONE_NEWPID, CLONE_NEWUTS,
-    MS_NODEV, MS_NOEXEC, MS_NOSUID, MS_RDONLY, MS_STRICTATIME, S_IFCHR, S_IRGRP, S_IROTH, S_IRUSR,
-    S_IWGRP, S_IWOTH, S_IWUSR,
+    MS_BIND, MS_NODEV, MS_NOEXEC, MS_NOSUID, MS_RDONLY, MS_STRICTATIME, S_IFCHR, S_IRGRP, S_IROTH,
+    S_IRUSR, S_IWGRP, S_IWOTH, S_IWUSR,
 };
+use rootfs::RootFS;
 use std::{
-    env::current_dir,
     fs::create_dir_all,
     io,
     os::unix::{fs::symlink, process::CommandExt},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
+#[derive(Parser, Debug)]
+struct Args {
+    image: String,
+    pty: Vec<String>,
+}
+
 pub fn manager_main() -> io::Result<()> {
-    const NS_FLAGS: i32 = CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWIPC | CLONE_NEWUTS | CLONE_NEWNET;
-    unshare(NS_FLAGS)?;
-    log::info!("unshared");
-    chroot(&current_dir()?.as_cstring()?)?;
-    log::info!("chrooted");
-    setup_mounts()?;
-    log::info!("mounted");
+    let args = Args::parse();
+    // We should expect the server to set us up with a unix socket for stdin
+    unshare(CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWIPC | CLONE_NEWUTS | CLONE_NEWNET)?;
+    let root = RootFS::new("./arch.img")?;
+    setup_pty(root.path(), &args.pty)?;
+    setup_mounts(root.path())?;
+    chroot(&root.path().as_cstring())?;
     setup_devices()?;
-    log::info!("devices");
     setup_io_link()?;
-    log::info!("io link");
     log::info!("starting init");
     let mut child = unsafe {
-        std::process::Command::new("/bin/bash")
+        std::process::Command::new("/sbin/init")
             .env_clear()
             .pre_exec(|| {
                 create_dir_all(Path::new("/proc")).map_err(io::Error::other)?;
@@ -39,6 +46,7 @@ pub fn manager_main() -> io::Result<()> {
                     MS_NOEXEC | MS_NOSUID | MS_NODEV,
                     None,
                 )?;
+                log::info!("spawning");
                 Ok(())
             })
     }
@@ -49,8 +57,25 @@ pub fn manager_main() -> io::Result<()> {
     Ok(())
 }
 
-pub fn setup_mounts() -> io::Result<()> {
-    create_dir_all("/dev")?;
+fn setup_pty(root: &Path, ptys: &[String]) -> io::Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    for (i, pty) in ptys.into_iter().enumerate() {
+        let src_path = Path::new(pty);
+        let dst_path = root.join(format!("dev/pts/{i}"));
+        mount(
+            Some(&src_path.as_cstring()),
+            &dst_path.as_cstring(),
+            None,
+            MS_BIND,
+            None,
+        )?;
+        out.push(format!("pts/{i}").into())
+    }
+    Ok(out)
+}
+
+pub fn setup_mounts(root: &Path) -> io::Result<()> {
+    create_dir_all(root.join("dev"))?;
     log::info!("created dirs");
     mount(
         Some(c"tmpfs"),
@@ -60,34 +85,6 @@ pub fn setup_mounts() -> io::Result<()> {
         Some(c"mode=755"),
     )?;
     log::info!("created tmpfs");
-    create_dir_all("/dev/shm")?;
-    mount(
-        Some(c"shm"),
-        c"/dev/shm",
-        Some(c"tmpfs"),
-        MS_NOEXEC | MS_NOSUID | MS_NODEV,
-        Some(c"mode=1777,size=65536k"),
-    )?;
-
-    log::info!("created shm");
-    create_dir_all("/dev/mqueue")?;
-    mount(
-        Some(c"mqueue"),
-        c"/dev/mqueue",
-        Some(c"mqueue"),
-        MS_NOEXEC | MS_NOSUID | MS_NODEV,
-        None,
-    )?;
-    log::info!("created mqueue");
-    create_dir_all("/dev/pts")?;
-    mount(
-        Some(c"devpts"),
-        c"/dev/pts",
-        Some(c"devpts"),
-        MS_NOEXEC | MS_NOSUID,
-        Some(c"newinstance,ptmxmode=0666,mode=620,gid=5"),
-    )?;
-    log::info!("created pts");
     create_dir_all("/sys")?;
     mount(
         Some(c"sysfs"),
@@ -101,8 +98,8 @@ pub fn setup_mounts() -> io::Result<()> {
 }
 
 pub fn setup_devices() -> io::Result<()> {
-    create_dir_all(Path::new("/dev/net"))?;
-
+    create_dir_all("/dev/net")?;
+    create_dir_all("dev/pts")?;
     let mode: mode_t = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     unsafe {
         mknod(c"/dev/null".as_ptr(), S_IFCHR | mode, makedev(1, 3));

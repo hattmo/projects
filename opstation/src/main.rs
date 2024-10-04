@@ -1,6 +1,6 @@
 #![feature(linux_pidfd)]
-
-use clap::Parser;
+#![feature(unix_socket_ancillary_data)]
+use std::io;
 
 use manager::manager_main;
 use server::server_main;
@@ -10,29 +10,24 @@ mod raw;
 mod server;
 mod util;
 
-#[derive(Parser, Debug)]
-struct Args {
-    #[clap(short, long)]
-    manager: bool,
-}
-
-fn main() {
+fn main() -> io::Result<()> {
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)
         .init();
     match std::env::args().nth(0) {
         Some(command) if command == "manager".to_owned() => {
             log::info!("starting manager");
-            manager_main();
+            manager_main()?;
             log::info!("manager exited");
         }
         Some(_) => {
             log::info!("starting server");
-            server_main();
+            server_main()?;
             log::info!("server exited");
         }
         None => {
             log::error!("invalid arguments")
         }
     };
+    Ok(())
 }

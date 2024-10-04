@@ -3,6 +3,7 @@ use std::{
     process::Stdio,
 };
 
+#[allow(unused)]
 fn gen_key_pair() -> Result<(String, String), io::Error> {
     let output = std::process::Command::new("wg").arg("genkey").output()?;
     let private = output.stdout;
@@ -37,6 +38,7 @@ fn gen_key_pair() -> Result<(String, String), io::Error> {
     Ok((public, private))
 }
 
+#[allow(unused)]
 pub fn create_tunnel() -> io::Result<()> {
     let status = std::process::Command::new("ip")
         .args(&["link", "add", "dev", "wg0", "type", "wireguard"])
