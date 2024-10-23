@@ -1,12 +1,9 @@
 use std::{
     fs::File,
-    io::{self, IoSliceMut},
+    io,
     os::{
         fd::OwnedFd,
-        unix::{
-            net::{SocketAncillary, UnixDatagram},
-            process::CommandExt,
-        },
+        unix::{net::UnixDatagram, process::CommandExt},
     },
 };
 
@@ -14,7 +11,7 @@ use libc::CLONE_NEWNS;
 
 use crate::{
     raw::{mount, unshare},
-    util::Fds,
+    util::ReceiveAncillary,
 };
 
 pub fn server_main() -> io::Result<()> {
@@ -33,17 +30,12 @@ pub fn server_main() -> io::Result<()> {
         .stdin(child)
         .arg0("manager")
         .arg("./arch.img")
+        .arg("")
         .spawn()?;
     log::info!("waiting for pty");
     let mut data_buffer = [0; 255];
-    let mut ancillary_buffer = [0; 255];
-    let mut bufs = [IoSliceMut::new(&mut data_buffer)];
-    let mut ancillary = SocketAncillary::new(&mut ancillary_buffer);
-    let Ok((_, _)) = parent.recv_vectored_with_ancillary(&mut bufs, &mut ancillary) else {
-        return Ok(());
-    };
+    let (_, ancillary) = parent.recv_ancillary(&mut data_buffer)?;
     let mut pty_master: File = ancillary
-        .fds()
         .into_iter()
         .next()
         .ok_or(io::Error::other("No fd in message"))?

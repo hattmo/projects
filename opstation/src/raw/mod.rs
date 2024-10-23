@@ -2,9 +2,8 @@ mod loop_ctrl;
 
 use std::{
     ffi::{c_void, CStr},
-    fs::{File, OpenOptions},
-    io::{self, prelude::*},
-    mem,
+    fs::OpenOptions,
+    io, mem,
     os::fd::{AsRawFd, FromRawFd, OwnedFd},
     path::{Path, PathBuf},
     ptr,
@@ -135,50 +134,26 @@ impl LoopDev {
     }
 }
 
-pub struct PtyDev {
-    master: File,
-    slave_path: PathBuf,
-}
-impl PtyDev {
-    pub fn new() -> io::Result<Self> {
-        let ret = unsafe { libc::posix_openpt(O_RDWR) };
-        if ret < 0 {
-            return Err(io::Error::last_os_error());
-        }
-        let master = unsafe { File::from_raw_fd(ret) };
-        if unsafe { libc::grantpt(master.as_raw_fd()) } < 0 {
-            return Err(io::Error::last_os_error());
-        };
-        if unsafe { libc::unlockpt(master.as_raw_fd()) } < 0 {
-            return Err(io::Error::last_os_error());
-        };
-        let mut buf = [0; 255];
-        if unsafe { libc::ptsname_r(master.as_raw_fd(), buf.as_mut_ptr(), buf.len()) } < 0 {
-            return Err(io::Error::last_os_error());
-        };
-        let slave_path: PathBuf = unsafe { CStr::from_ptr(buf.as_mut_ptr()) }
-            .to_owned()
-            .into_string()
-            .or(Err(io::Error::other("Bad pty slave path")))?
-            .into();
-        Ok(PtyDev { master, slave_path })
+pub fn create_pty() -> io::Result<(OwnedFd, PathBuf)> {
+    let ret = unsafe { libc::posix_openpt(O_RDWR) };
+    if ret < 0 {
+        return Err(io::Error::last_os_error());
     }
-    pub fn slave(&self) -> &Path {
-        &self.slave_path
-    }
-}
-
-impl Read for PtyDev {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        self.master.read(buf)
-    }
-}
-impl Write for PtyDev {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        self.master.write(buf)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.master.flush()
-    }
+    let master = unsafe { OwnedFd::from_raw_fd(ret) };
+    if unsafe { libc::grantpt(master.as_raw_fd()) } < 0 {
+        return Err(io::Error::last_os_error());
+    };
+    if unsafe { libc::unlockpt(master.as_raw_fd()) } < 0 {
+        return Err(io::Error::last_os_error());
+    };
+    let mut buf = [0; 255];
+    if unsafe { libc::ptsname_r(master.as_raw_fd(), buf.as_mut_ptr(), buf.len()) } < 0 {
+        return Err(io::Error::last_os_error());
+    };
+    let slave_path: PathBuf = unsafe { CStr::from_ptr(buf.as_mut_ptr()) }
+        .to_owned()
+        .into_string()
+        .or(Err(io::Error::other("Bad pty slave path")))?
+        .into();
+    Ok((master, slave_path))
 }

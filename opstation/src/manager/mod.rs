@@ -1,15 +1,17 @@
 mod net;
 mod rootfs;
 
-use crate::raw::{chroot, mount, unshare};
-use crate::util::AsCString;
+use crate::raw::{chroot, create_pty, mount, unshare};
+use crate::util::{AsCString, SendAncillary};
 use clap::Parser;
 use libc::{
     makedev, mknod, mode_t, CLONE_NEWIPC, CLONE_NEWNET, CLONE_NEWNS, CLONE_NEWPID, CLONE_NEWUTS,
-    MS_BIND, MS_NODEV, MS_NOEXEC, MS_NOSUID, MS_RDONLY, MS_STRICTATIME, S_IFCHR, S_IRGRP, S_IROTH,
-    S_IRUSR, S_IWGRP, S_IWOTH, S_IWUSR,
+    MS_NODEV, MS_NOEXEC, MS_NOSUID, MS_RDONLY, MS_STRICTATIME, S_IFCHR, S_IRGRP, S_IROTH, S_IRUSR,
+    S_IWGRP, S_IWOTH, S_IWUSR,
 };
 use rootfs::RootFS;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::unix::net::UnixDatagram;
 use std::{
     fs::create_dir_all,
     io,
@@ -19,20 +21,27 @@ use std::{
 
 #[derive(Parser, Debug)]
 struct Args {
+    #[arg(short, long)]
     image: String,
-    pty: Vec<String>,
+    #[arg(short, long)]
+    ptys: usize,
 }
 
 pub fn manager_main() -> io::Result<()> {
+    let mut to_server = unsafe { UnixDatagram::from_raw_fd(std::io::stdin().as_raw_fd()) };
     let args = Args::parse();
     // We should expect the server to set us up with a unix socket for stdin
     unshare(CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWIPC | CLONE_NEWUTS | CLONE_NEWNET)?;
     let root = RootFS::new("./arch.img")?;
-    setup_pty(root.path(), &args.pty)?;
-    setup_mounts(root.path())?;
     chroot(&root.path().as_cstring())?;
+    setup_mounts()?;
     setup_devices()?;
-    setup_io_link()?;
+    let (masters, slaves) = setup_ptys(args.ptys)?;
+    println!("{slaves:?}");
+    let buf = [0];
+    to_server.send_ancillary(&buf, &masters)?;
+
+    setup_links()?;
     log::info!("starting init");
     let mut child = unsafe {
         std::process::Command::new("/sbin/init")
@@ -57,26 +66,12 @@ pub fn manager_main() -> io::Result<()> {
     Ok(())
 }
 
-fn setup_pty(root: &Path, ptys: &[String]) -> io::Result<Vec<PathBuf>> {
-    let mut out = Vec::new();
-    for (i, pty) in ptys.into_iter().enumerate() {
-        let src_path = Path::new(pty);
-        let dst_path = root.join(format!("dev/pts/{i}"));
-        mount(
-            Some(&src_path.as_cstring()),
-            &dst_path.as_cstring(),
-            None,
-            MS_BIND,
-            None,
-        )?;
-        out.push(format!("pts/{i}").into())
-    }
-    Ok(out)
+fn setup_ptys(num: usize) -> io::Result<(Vec<OwnedFd>, Vec<PathBuf>)> {
+    (0..num).into_iter().map(|_| create_pty()).collect()
 }
 
-pub fn setup_mounts(root: &Path) -> io::Result<()> {
-    create_dir_all(root.join("dev"))?;
-    log::info!("created dirs");
+pub fn setup_mounts() -> io::Result<()> {
+    create_dir_all("/dev")?;
     mount(
         Some(c"tmpfs"),
         c"/dev",
@@ -84,7 +79,7 @@ pub fn setup_mounts(root: &Path) -> io::Result<()> {
         MS_NOEXEC | MS_STRICTATIME,
         Some(c"mode=755"),
     )?;
-    log::info!("created tmpfs");
+    log::info!("created /dev");
     create_dir_all("/sys")?;
     mount(
         Some(c"sysfs"),
@@ -93,7 +88,16 @@ pub fn setup_mounts(root: &Path) -> io::Result<()> {
         MS_NOEXEC | MS_NOSUID | MS_NODEV | MS_RDONLY,
         None,
     )?;
-    log::info!("created sys");
+    log::info!("created /sys");
+    create_dir_all("/dev/pts")?;
+    mount(
+        Some(c"devpts"),
+        c"/dev/pts",
+        Some(c"devpts"),
+        MS_NOEXEC | MS_NOSUID,
+        Some(c"newinstance,ptmxmode=0666,mode=620,gid=5"),
+    )?;
+    log::info!("created /dev/pts");
     Ok(())
 }
 
@@ -114,7 +118,7 @@ pub fn setup_devices() -> io::Result<()> {
     Ok(())
 }
 
-pub fn setup_io_link() -> io::Result<()> {
+pub fn setup_links() -> io::Result<()> {
     symlink("/proc/self/fd", "/dev/fd")?;
     symlink("/proc/self/fd/0", "/dev/stdin")?;
     symlink("/proc/self/fd/1", "/dev/stdout")?;
