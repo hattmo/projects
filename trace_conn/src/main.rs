@@ -55,12 +55,12 @@ async fn web_job(ip: Ipv4Addr, port: u16, counts: CountMap) {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn root() -> Html<String> {
-    include_str!("index.html").to_owned().into()
+async fn root() -> Html<&'static str> {
+    include_str!("index.html").into()
 }
 
-async fn css() -> Html<String> {
-    include_str!("index.css").to_owned().into()
+async fn css() -> Html<&'static str> {
+    include_str!("index.css").into()
 }
 
 async fn data(state: State<CountMap>) -> Html<String> {

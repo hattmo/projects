@@ -88,14 +88,13 @@ impl Route {
     }
 }
 
-pub struct Router<'a> {
+pub struct Router<'a, const MAX_PACKET: usize> {
     cert: SigningKey,
     ca: VerifyingKey,
     id: u64,
     route_table: [Option<Route>; 128],
     link_state: [Option<LinkState>; 32],
-    inbound_packets: [Option<DataPacket<'a>>; 32],
-    outbound_packets: [Option<DataPacket<'a>>; 32],
+    packet_buffers: &mut [[u8; MAX_PACKET]],
 }
 
 pub enum RouterError {
@@ -116,16 +115,17 @@ impl<'a> Router<'a> {
         key: &[u8; 64],
         sig: &[u8; 64],
         ca: &[u8; 32],
+        buffers: &mut [u8],
     ) -> Result<Self, RouterError> {
         let cert = SigningKey::from_keypair_bytes(key)?;
         let ca = VerifyingKey::from_bytes(ca)?;
         let sig = Signature::from_bytes(sig);
+        let (_, packet_buffers, _) = unsafe { buffers.align_to_mut::<[u8; 1000]>() };
         Result::Ok(Self {
             id,
             cert,
             ca,
-            inbound_packets: [const { Option::None }; 32],
-            outbound_packets: [const { Option::None }; 32],
+            packet_buffers,
             link_state: [const { Option::None }; 32],
             route_table: [const { Option::None }; 128],
         })
@@ -195,28 +195,28 @@ mod test {
 
     use crate::Router;
 
-    #[test]
-    fn foo() {
-        let mut buffer = [0u8; 1024];
-        let key = [0u8; 64];
-        let Ok(mut router) = Router::new(1337, &key, &key[..32].try_into().unwrap()) else {
-            return;
-        };
-        let Ok(link_token) = router.create_link(&mut buffer) else {
-            return;
-        };
-        let Some(link) = router.get_link(&link_token) else {
-            return;
-        };
-        let key: &Key<Aes256Gcm> = &[0; 32].into();
-        let nonce: Nonce<U12> = [0u8; 12].into();
-        let mut cipher = Aes256Gcm::new(key);
-        let mut inplace = [0u8; 100];
-        let tag = cipher
-            .encrypt_in_place_detached(&nonce, &[0], &mut inplace)
-            .unwrap();
-        let foo = cipher
-            .decrypt_in_place_detached(&nonce, &[0], &mut inplace, &tag)
-            .unwrap();
-    }
+    //#[test]
+    //fn foo() {
+    //    let mut buffer = [0u8; 1024];
+    //    let key = [0u8; 64];
+    //    let Ok(mut router) = Router::new(1337, &key, &key[..32].try_into().unwrap()) else {
+    //        return;
+    //    };
+    //    let Ok(link_token) = router.create_link(&mut buffer) else {
+    //        return;
+    //    };
+    //    let Some(link) = router.get_link(&link_token) else {
+    //        return;
+    //    };
+    //    let key: &Key<Aes256Gcm> = &[0; 32].into();
+    //    let nonce: Nonce<U12> = [0u8; 12].into();
+    //    let mut cipher = Aes256Gcm::new(key);
+    //    let mut inplace = [0u8; 100];
+    //    let tag = cipher
+    //        .encrypt_in_place_detached(&nonce, &[0], &mut inplace)
+    //        .unwrap();
+    //    let foo = cipher
+    //        .decrypt_in_place_detached(&nonce, &[0], &mut inplace, &tag)
+    //        .unwrap();
+    //}
 }

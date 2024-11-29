@@ -17,13 +17,7 @@ fn commands() -> io::Result<()> {
     let (branches, _) = run(&["git", "branch", "-a"])?;
     let bot_branches: Vec<_> = branches
         .lines()
-        .filter_map(|line| {
-            if line.contains("origin/dependabot") {
-                line.split("/").nth(2)
-            } else {
-                None
-            }
-        })
+        .filter(|line| line.contains("origin/dependabot"))
         .collect();
     if bot_branches.is_empty() {
         println!("[!] No dependa bot branches");
