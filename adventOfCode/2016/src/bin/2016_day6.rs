@@ -29,7 +29,7 @@ fn part_1(input: &str) -> String {
             .iter()
             .filter(|((index, _), _)| *index == i)
             .collect::<Vec<_>>();
-        letters_in_col.sort_by_key(|(_, count)| count.clone());
+        letters_in_col.sort_by_key(|(_, count)| **count);
         let ((_, foo), _) = letters_in_col.last().expect("Failed to find first");
         out.push(*foo);
     }
@@ -55,7 +55,7 @@ fn part_2(input: &str) -> String {
             .iter()
             .filter(|((index, _), _)| *index == i)
             .collect::<Vec<_>>();
-        letters_in_col.sort_by_key(|(_, count)| count.clone());
+        letters_in_col.sort_by_key(|(_, count)| **count);
         let ((_, foo), _) = letters_in_col.first().expect("Failed to find first");
         out.push(*foo);
     }
