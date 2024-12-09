@@ -1,0 +1,241 @@
+use core::panic;
+use std::{
+    error::Error,
+    fmt::Debug,
+    ops::{Index, IndexMut},
+    str::FromStr,
+};
+
+fn main() -> Result<(), Box<dyn Error>> {
+    let input = helper::get_input("2021", "24", true)?;
+    let res = part1(&input);
+    println!("part1: {res:?}");
+    let res = part2(&input);
+    println!("part2: {res:?}");
+    Ok(())
+}
+
+#[derive(Debug)]
+enum Reg {
+    W,
+    X,
+    Y,
+    Z,
+}
+
+impl FromStr for Reg {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "w" => Ok(Self::W),
+            "x" => Ok(Self::X),
+            "y" => Ok(Self::Y),
+            "z" => Ok(Self::Z),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Param {
+    Reg(Reg),
+    Imm(isize),
+}
+
+impl FromStr for Param {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.parse::<Reg>() {
+            Ok(reg) => Ok(Self::Reg(reg)),
+            Err(_) => {
+                let num = s.parse::<isize>().or(Err(()))?;
+                Ok(Self::Imm(num))
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Inst {
+    Inp(Reg),
+    Add(Reg, Param),
+    Mul(Reg, Param),
+    Div(Reg, Param),
+    Mod(Reg, Param),
+    Eql(Reg, Param),
+}
+
+#[derive(Debug)]
+struct Machine {
+    insts: Vec<Inst>,
+}
+
+struct State {
+    w: isize,
+    x: isize,
+    y: isize,
+    z: isize,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        State {
+            w: 0,
+            x: 0,
+            y: 0,
+            z: 0,
+        }
+    }
+}
+
+impl<'a> Index<&Reg> for &'a mut State {
+    type Output = isize;
+
+    fn index(&self, index: &Reg) -> &Self::Output {
+        match index {
+            Reg::W => &self.w,
+            Reg::X => &self.x,
+            Reg::Y => &self.y,
+            Reg::Z => &self.z,
+        }
+    }
+}
+
+impl<'a> IndexMut<&Reg> for &'a mut State {
+    fn index_mut(&mut self, index: &Reg) -> &mut Self::Output {
+        match index {
+            Reg::W => &mut self.w,
+            Reg::X => &mut self.x,
+            Reg::Y => &mut self.y,
+            Reg::Z => &mut self.z,
+        }
+    }
+}
+
+impl Machine {
+    fn new(input: &str) -> Result<Self, ()> {
+        let insts = input
+            .lines()
+            .map(|line| {
+                let parts: Vec<_> = line.split(" ").map(|item| item.trim()).collect();
+                Ok(match parts.as_slice() {
+                    ["inp", reg] => Inst::Inp(reg.parse()?),
+                    ["add", reg, param] => Inst::Add(reg.parse()?, param.parse()?),
+                    ["mul", reg, param] => Inst::Mul(reg.parse()?, param.parse()?),
+                    ["div", reg, param] => Inst::Div(reg.parse()?, param.parse()?),
+                    ["mod", reg, param] => Inst::Mod(reg.parse()?, param.parse()?),
+                    ["eql", reg, param] => Inst::Eql(reg.parse()?, param.parse()?),
+                    _ => return Err(()),
+                })
+            })
+            .collect::<Result<Vec<Inst>, ()>>()?;
+        Ok(Self { insts })
+    }
+
+    fn exec(&self, input: impl IntoIterator<Item = isize>, mut state: &mut State) -> Option<()> {
+        let mut input = input.into_iter();
+        let Machine { insts } = self;
+        for inst in insts {
+            match inst {
+                Inst::Inp(reg) => state[reg] = input.next()?,
+                Inst::Add(reg_a, Param::Reg(reg_b)) => state[reg_a] += state[reg_b],
+                Inst::Add(reg, Param::Imm(imm)) => state[reg] += imm,
+                Inst::Mul(reg_a, Param::Reg(reg_b)) => state[reg_a] *= state[reg_b],
+                Inst::Mul(reg, Param::Imm(imm)) => state[reg] *= imm,
+                Inst::Div(reg_a, Param::Reg(reg_b)) => {
+                    state[reg_a] = state[reg_a].checked_div(state[reg_b])?
+                }
+                Inst::Div(reg, Param::Imm(imm)) => state[reg] = state[reg].checked_div(*imm)?,
+                Inst::Mod(reg_a, Param::Reg(reg_b)) => state[reg_a] %= state[reg_b],
+                Inst::Mod(reg, Param::Imm(imm)) => state[reg] %= imm,
+                Inst::Eql(reg_a, Param::Reg(reg_b)) => {
+                    state[reg_a] = (state[reg_a] == state[reg_b]).then_some(1).unwrap_or(0)
+                }
+                Inst::Eql(reg, Param::Imm(imm)) => {
+                    state[reg] = (state[reg] == *imm).then_some(1).unwrap_or(0)
+                }
+            }
+        }
+        Some(())
+    }
+}
+
+struct InputGenerator {
+    inner: [isize; 14],
+}
+
+impl Default for InputGenerator {
+    fn default() -> Self {
+        Self { inner: [9; 14] }
+    }
+}
+
+impl Iterator for InputGenerator {
+    type Item = [isize; 14];
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let len = self.inner.len();
+        let out = &mut self.inner;
+        for i in (0..len).rev() {
+            out[i] -= 1;
+            if out[i] == 0 {
+                out[i] = 9
+            } else {
+                break;
+            }
+        }
+        return Some(*out);
+    }
+}
+
+fn part1(input: &str) -> impl Debug + use<'_> {
+    let machine = Machine::new(input).unwrap();
+    let mut state = State::default();
+    for input in InputGenerator::default() {
+        machine.exec(input, &mut state);
+        if state.z == 0 {
+            return input;
+        }
+    }
+    panic!("no answer found");
+}
+fn part2(_input: &str) -> impl Debug + use<'_> {
+    "todo"
+}
+
+#[cfg(test)]
+mod test {
+    use std::io::stdin;
+
+    use crate::{InputGenerator, Machine, State};
+
+    #[test]
+    fn test_part1() {
+        let input = "inp w
+add z w
+mod z 2
+div w 2
+add y w
+mod y 2
+div w 2
+add x w
+mod x 2
+div w 2
+mod w 2";
+        let machine = Machine::new(input).unwrap();
+        let input = [5];
+        let mut state = State::default();
+        machine.exec(input, &mut state).unwrap();
+        println!("{}{}{}{}", state.w, state.x, state.y, state.z);
+    }
+    #[test]
+    fn test_iter() {
+        let gen = InputGenerator::default();
+        for i in gen {
+            println!("{:?}", i);
+            let _ = stdin().read_line(&mut String::new());
+        }
+    }
+}

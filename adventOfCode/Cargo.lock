@@ -50,6 +50,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "aoc_2021"
+version = "0.1.0"
+dependencies = [
+ "helper",
+]
+
+[[package]]
 name = "aoc_2022"
 version = "0.1.0"
 dependencies = [
