@@ -1,16 +1,8 @@
 use core::panic;
-use std::{
-    error::Error,
-    fmt::{Debug, Display},
-};
+use std::fmt::{Debug, Display};
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "7", true)?;
-    let res = part1(&input);
-    println!("part1: {res:?}");
-    let res = part2(&input);
-    println!("part2: {res:?}");
-    Ok(())
+fn main() {
+    helper::run("2024", "7", part_1, part_2);
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -57,7 +49,7 @@ impl Equation {
     }
 }
 
-fn part1(input: &str) -> impl Debug + use<'_> {
+fn part_1(input: &str) -> impl Debug {
     input
         .lines()
         .map(|line| {
@@ -166,7 +158,7 @@ impl Display for EquationExt {
     }
 }
 
-fn part2(input: &str) -> impl Debug + use<'_> {
+fn part_2(input: &str) -> impl Debug {
     input
         .lines()
         .map(|line| {
@@ -197,10 +189,10 @@ fn part2(input: &str) -> impl Debug + use<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::part2;
+    use crate::part_2;
 
     #[test]
-    fn test_part2() {
+    fn test() {
         let input = "190: 10 19
 3267: 81 40 27
 83: 17 5
@@ -210,7 +202,7 @@ mod test {
 192: 17 8 14
 21037: 9 7 18 13
 292: 11 6 16 20";
-        let res = part2(&input);
-        println!("{res:?}");
+        let res = format!("{:?}", part_2(&input));
+        assert_eq!(res, "11387")
     }
 }

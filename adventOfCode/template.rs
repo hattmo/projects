@@ -1,17 +1,30 @@
-use std::{error::Error, fmt::Debug};
+use std::fmt::Debug;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "1", true)?;
-    let res = part1(&input);
-    println!("part1: {res:?}");
-    let res = part2(&input);
-    println!("part2: {res:?}");
-    Ok(())
+fn main() {
+    helper::run("2024", "11", part_1, part_2);
 }
 
-fn part1(_input: &str) -> impl Debug + use<'_> {
+fn part_1(_input: &str) -> impl Debug {
     "todo"
 }
-fn part2(_input: &str) -> impl Debug + use<'_> {
+fn part_2(_input: &str) -> impl Debug {
     "todo"
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    const TEST_INPUT: &'static str = "TEST_INPUT";
+
+    #[test]
+    fn test_1() {
+        let actual = format!("{:?}", part_1(TEST_INPUT));
+        assert_eq!(actual, "\"todo\"");
+    }
+    #[test]
+    fn test_2() {
+        let actual = format!("{:?}", part_2(TEST_INPUT));
+        assert_eq!(actual, "\"todo\"");
+    }
 }

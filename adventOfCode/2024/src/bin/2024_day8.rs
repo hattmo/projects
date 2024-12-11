@@ -2,17 +2,11 @@
 use std::{
     cmp::{max, minmax},
     collections::{HashMap, HashSet},
-    error::Error,
     fmt::Debug,
 };
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "8", true)?;
-    let res = part1(&input);
-    println!("part1: {res:#?}");
-    let res = part2(&input);
-    println!("part2: {res:?}");
-    Ok(())
+fn main() {
+    helper::run("2024", "8", part_1, part_2);
 }
 
 fn parse_map(input: &str) -> ((isize, isize), HashMap<char, Vec<(isize, isize)>>) {
@@ -74,7 +68,7 @@ fn antinode_ex(
     out
 }
 
-fn part1(input: &str) -> impl Debug + use<'_> {
+fn part_1(input: &str) -> impl Debug {
     let ((width, height), antene) = parse_map(input);
     let mut nodes = HashSet::new();
     for (_, coords) in antene {
@@ -89,7 +83,7 @@ fn part1(input: &str) -> impl Debug + use<'_> {
         .filter(move |&(nx, ny)| nx >= 0 && nx <= width && ny >= 0 && ny <= height)
         .count()
 }
-fn part2(input: &str) -> impl Debug + use<'_> {
+fn part_2(input: &str) -> impl Debug {
     let ((width, height), antene) = parse_map(input);
     let mut nodes = HashSet::new();
     for (_, coords) in antene {

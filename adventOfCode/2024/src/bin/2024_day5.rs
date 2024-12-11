@@ -1,17 +1,12 @@
 #![feature(slice_split_once)]
 
-use std::{collections::HashSet, error::Error, fmt::Debug, usize};
+use std::{collections::HashSet, fmt::Debug};
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "5", true)?;
-    let res = part1(&input);
-    println!("part1: {res:?}");
-    let res = part2(&input);
-    println!("part2: {res:?}");
-    Ok(())
+fn main() {
+    helper::run("2024", "5", part_1, part_2);
 }
 
-fn part1(input: &str) -> impl Debug + use<'_> {
+fn part_1(input: &str) -> impl Debug {
     let lines: Vec<_> = input.lines().collect();
     let (rules, updates) = lines.split_once(|line| line.is_empty()).unwrap();
 
@@ -92,7 +87,7 @@ impl<'a, T> Iterator for PairIterator<'a, T> {
     }
 }
 
-fn part2(input: &str) -> impl Debug + use<'_> {
+fn part_2(input: &str) -> impl Debug {
     let lines: Vec<_> = input.lines().collect();
     let (rules, updates) = lines.split_once(|line| line.is_empty()).unwrap();
 
@@ -151,7 +146,7 @@ fn part2(input: &str) -> impl Debug + use<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::{part1, part2};
+    use crate::part_2;
 
     #[test]
     fn test() {
@@ -183,8 +178,7 @@ mod test {
 75,97,47,61,53
 61,13,29
 97,13,75,29,47";
-        let actual = part2(&input);
-        println!("{actual:?}");
-        assert!(false)
+        let actual = format!("{:?}", part_2(&input));
+        assert_eq!(actual, "123")
     }
 }

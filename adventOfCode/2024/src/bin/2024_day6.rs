@@ -1,12 +1,7 @@
-use std::{cell::RefCell, collections::HashMap, error::Error, fmt::Debug, ops::Add, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, ops::Add, rc::Rc};
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "6", true)?;
-    let res = part1(&input);
-    println!("part1: {res:?}");
-    let res = part2(&input);
-    println!("part2: {res:?}");
-    Ok(())
+fn main() {
+    helper::run("2024", "6", part_1, part_2);
 }
 #[derive(Debug, Clone)]
 enum Space {
@@ -77,12 +72,21 @@ fn parse_map(data: &str) -> (Coord, HashMap<Coord, Space>) {
                     '#' => Space::Block,
                     '^' => {
                         let mut coord = coord.borrow_mut();
-                        *coord = Some(Coord { x: col, y: row });
+                        *coord = Some(Coord {
+                            x: col + 1,
+                            y: row + 1,
+                        });
                         Space::Visited(vec![Dir::Up])
                     }
                     _ => panic!("unexpected input"),
                 };
-                (Coord { x: col, y: row }, space)
+                (
+                    Coord {
+                        x: col + 1,
+                        y: row + 1,
+                    },
+                    space,
+                )
             })
         })
         .flatten()
@@ -114,13 +118,13 @@ fn resolve_board(mut coord: Coord, board: &mut HashMap<Coord, Space>) -> bool {
     }
 }
 
-fn part1(input: &str) -> impl Debug + use<'_> {
+fn part_1(input: &str) -> impl Debug {
     let (start_coord, mut board) = parse_map(input);
     resolve_board(start_coord, &mut board);
     board.values().filter(|space| space.is_visited()).count()
 }
 
-fn part2(input: &str) -> impl Debug + use<'_> {
+fn part_2(input: &str) -> impl Debug {
     let (start_coord, blank_board) = parse_map(input);
     let mut orig_board = blank_board.clone();
     resolve_board(start_coord, &mut orig_board);

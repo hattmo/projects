@@ -1,12 +1,7 @@
-use std::{error::Error, fmt::Debug};
+use std::fmt::Debug;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "3", true)?;
-    let res = part1(&input);
-    println!("part1: {res:?}");
-    let res = part2(&input);
-    println!("part2: {res:?}");
-    Ok(())
+fn main() {
+    helper::run("2024", "3", part_1, part_2);
 }
 
 fn parse_mul(sym: &str) -> (usize, usize) {
@@ -18,7 +13,7 @@ fn parse_mul(sym: &str) -> (usize, usize) {
     (left, right)
 }
 
-fn part1(input: &str) -> impl Debug + use<'_> {
+fn part_1(input: &str) -> impl Debug {
     let rex = regex::Regex::new(r#"mul\(\d+,\d+\)"#).unwrap();
     let res: usize = input
         .lines()
@@ -36,7 +31,7 @@ enum Symbol {
     Mul(usize, usize),
 }
 
-fn part2(input: &str) -> impl Debug + use<'_> {
+fn part_2(input: &str) -> impl Debug {
     let rex = regex::Regex::new(r#"(mul\(\d+,\d+\)|do\(\)|don't\(\))"#).unwrap();
     let matches = input
         .lines()

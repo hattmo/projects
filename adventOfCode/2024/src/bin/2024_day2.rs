@@ -1,13 +1,8 @@
 #![feature(array_windows)]
-use std::{error::Error, fmt::Display, usize};
+use std::fmt::Debug;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "2", true)?;
-    let res = part1(&input);
-    println!("part1: {res}");
-    let res = part2(&input);
-    println!("part2: {res}");
-    Ok(())
+fn main() {
+    helper::run("2024", "2", part_1, part_2);
 }
 
 fn is_safe(levels: &[usize]) -> bool {
@@ -19,7 +14,7 @@ fn is_safe(levels: &[usize]) -> bool {
             .all(|[a, b]| a > b && (a - b) >= 1 && (a - b) <= 3)
 }
 
-fn part1(input: &str) -> impl Display {
+fn part_1(input: &str) -> impl Debug {
     input
         .lines()
         .map(|line| {
@@ -31,7 +26,7 @@ fn part1(input: &str) -> impl Display {
         .count()
 }
 
-fn part2(input: &str) -> impl Display {
+fn part_2(input: &str) -> impl Debug {
     input
         .lines()
         .map(|line| {

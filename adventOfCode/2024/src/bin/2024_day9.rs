@@ -1,18 +1,12 @@
+#![feature(duration_millis_float)]
 use std::{
     cmp::Ordering::{Equal, Greater, Less},
     collections::VecDeque,
-    error::Error,
     fmt::Debug,
-    u128,
 };
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "9", true)?;
-    let res = part1(&input);
-    println!("part1: {res:?}");
-    let res = part2(&input);
-    println!("part2: {res:?}");
-    Ok(())
+fn main() {
+    helper::run("2024", "9", part_1, part_2);
 }
 #[derive(Debug)]
 enum Block {
@@ -27,7 +21,7 @@ fn calc_sum(id: u128, size: u128, index: &mut u128, sum: &mut u128) {
     *index += size;
 }
 
-fn part1(input: &str) -> impl Debug + use<'_> {
+fn part_1(input: &str) -> impl Debug {
     let (_, _, mut blocks) = input.chars().fold(
         (true, 0, VecDeque::new()),
         |(is_file, mut id, mut blocks), item| {
@@ -93,7 +87,7 @@ struct Blank {
     files: Vec<File>,
 }
 
-fn part2(input: &str) -> impl Debug + use<'_> {
+fn part_2(input: &str) -> impl Debug {
     let (_, _, mut files, mut blanks) = input.chars().fold(
         (true, 0, Vec::new(), Vec::new()),
         |(is_file, mut id, mut files, mut blanks), item| {
@@ -146,14 +140,14 @@ fn part2(input: &str) -> impl Debug + use<'_> {
 
 #[cfg(test)]
 mod test {
-    use crate::{part1, part2};
+    use crate::{part_1, part_2};
 
     #[test]
     fn test() {
         let input = "2333133121414131402";
-        let res = part1(input);
-        println!("test1: {res:?}");
-        let res = part2(input);
-        println!("test2: {res:?}");
+        let res = part_1(input);
+        println!("test 1: {res:?}");
+        let res = part_2(input);
+        println!("test 2: {res:?}");
     }
 }

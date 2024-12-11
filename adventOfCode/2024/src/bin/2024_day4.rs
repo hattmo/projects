@@ -1,15 +1,10 @@
-use std::{error::Error, fmt::Debug};
+use std::fmt::Debug;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "4", true)?;
-    let res = part1(&input);
-    println!("part1: {res:?}");
-    let res = part2(&input);
-    println!("part2: {res:?}");
-    Ok(())
+fn main() {
+    helper::run("2024", "4", part_1, part_2);
 }
 
-fn part1(input: &str) -> impl Debug + use<'_> {
+fn part_1(input: &str) -> impl Debug {
     let b: Vec<_> = input
         .lines()
         .map(|line| line.chars().collect::<Vec<_>>())
@@ -37,7 +32,7 @@ fn part1(input: &str) -> impl Debug + use<'_> {
     count
 }
 
-fn part2(input: &str) -> impl Debug + use<'_> {
+fn part_2(input: &str) -> impl Debug {
     let b: Vec<_> = input
         .lines()
         .map(|line| line.chars().collect::<Vec<_>>())
@@ -73,6 +68,7 @@ fn part2(input: &str) -> impl Debug + use<'_> {
 trait TwoDimentional<T> {
     fn xy(&self, x: isize, y: isize) -> Option<&T>;
 }
+
 impl<T> TwoDimentional<T> for Vec<Vec<T>> {
     fn xy(&self, x: isize, y: isize) -> Option<&T> {
         if x < 0 || y < 0 {
@@ -84,11 +80,11 @@ impl<T> TwoDimentional<T> for Vec<Vec<T>> {
 
 #[cfg(test)]
 mod test {
-    use crate::part2;
+    use crate::part_2;
 
     #[test]
     fn test_part2() {
-        let test = "MMMSXXMASM
+        let input = "MMMSXXMASM
 MSAMXMSMSA
 AMXSXMAAMM
 MSAMASMSMX
@@ -98,8 +94,8 @@ SMSMSASXSS
 SAXAMASAAA
 MAMMMXMMMM
 MXMXAXMASX";
-        let actual = part2(test);
-        println!("{actual:?}");
-        assert!(false)
+        let actual = format!("{:?}", part_2(input));
+        let expected = "9";
+        assert_eq!(actual, expected);
     }
 }

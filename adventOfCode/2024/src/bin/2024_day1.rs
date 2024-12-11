@@ -1,15 +1,10 @@
-use std::{error::Error, fmt::Display};
+use std::fmt::Debug;
 
-fn main() -> Result<(), Box<dyn Error>> {
-    let input = helper::get_input("2024", "1", true)?;
-    let res = part1(&input);
-    println!("part1: {res}");
-    let res = part2(&input);
-    println!("part2: {res}");
-    Ok(())
+fn main() {
+    helper::run("2024", "1", part_1, part_2);
 }
 
-fn part1(input: &str) -> impl Display {
+fn part_1(input: &str) -> impl Debug {
     let (mut left, mut right): (Vec<u64>, Vec<u64>) = input
         .lines()
         .map(|line| line.split_once(" ").unwrap())
@@ -27,7 +22,7 @@ fn part1(input: &str) -> impl Display {
         .map(|(left, right)| left.abs_diff(right))
         .sum::<u64>()
 }
-fn part2(input: &str) -> impl Display {
+fn part_2(input: &str) -> impl Debug {
     let (left, right): (Vec<u64>, Vec<u64>) = input
         .lines()
         .map(|line| line.split_once(" ").unwrap())
