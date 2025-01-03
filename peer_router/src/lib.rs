@@ -46,7 +46,7 @@ pub struct LinkHandle(usize);
 
 enum LinkState {
     Authenticating(VerifyingKey, SigningKey),
-    Sharing(),
+    Sharing,
     Up(Aes128Gcm),
     Dead,
 }
@@ -109,7 +109,7 @@ impl From<SignatureError> for RouterError {
 
 struct CreateLinkError;
 
-impl<'a> Router<'a> {
+impl<'a, const MAX_PACKET> Router<'a, MAX_PACKET> {
     pub fn new(
         id: u64,
         key: &[u8; 64],

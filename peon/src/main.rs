@@ -52,6 +52,7 @@ fn main() {
 struct ServerConn {
     stream: StreamOwned<ClientConnection, TcpStream>,
 }
+
 impl ServerConn {
     pub fn new(
         server: &str,
@@ -108,6 +109,7 @@ impl Worker {
         })
     }
 }
+
 trait ToIoResult<T> {
     fn to_io(self) -> IoResult<T>;
 }
