@@ -1,18 +1,18 @@
-use std::path::Path;
+use std::{error::Error, path::Path};
 
 use async_trait::async_trait;
 use sqlx::{sqlite::SqliteConnectOptions, Executor, Row, SqlitePool};
 
-use super::{Backend, BackendError};
+use super::Client;
 
 #[derive(Clone)]
-pub struct DB {
+pub struct Sqlite {
     pool: SqlitePool,
 }
 
 #[async_trait]
-impl Backend for DB {
-    async fn add_word(&mut self, word: &str, tags: &[String]) -> Result<(), BackendError> {
+impl Client for Sqlite {
+    async fn add_word(&mut self, word: &str, tags: &[String]) -> Result<(), Box<dyn Error>> {
         let word_id = self.insert_word_get_id(&word).await?;
         for tag in tags {
             let tag_id = self.insert_tag_get_id(&tag).await?;
@@ -20,7 +20,7 @@ impl Backend for DB {
         }
         Ok(())
     }
-    async fn get_words(&mut self, tags: &[String]) -> Result<Vec<String>, BackendError> {
+    async fn get_words(&mut self, tags: &[String]) -> Result<Vec<String>, Box<dyn Error>> {
         let filters: Vec<_> = tags
             .iter()
             .map(|tag| format!("tags.tag = \"{tag}\""))
@@ -33,8 +33,8 @@ impl Backend for DB {
         Ok(res.into_iter().map(|i| i.get::<String, usize>(0)).collect())
     }
 }
-impl DB {
-    pub async fn new(db_path: impl AsRef<Path>) -> Result<Self, BackendError> {
+impl Sqlite {
+    pub async fn new(db_path: impl AsRef<Path>) -> Result<Self, Box<dyn Error>> {
         let db_path = db_path.as_ref();
         let options = SqliteConnectOptions::new()
             .filename(db_path)
@@ -49,10 +49,10 @@ impl DB {
         pool.execute(sqlx::query(
                 "CREATE TABLE IF NOT EXISTS word_tags (ref_id INTEGER PRIMARY KEY AUTOINCREMENT, word_id INT, tag_id INT, UNIQUE(word_id,tag_id))",
             )).await?;
-        Ok(DB { pool })
+        Ok(Sqlite { pool })
     }
 
-    async fn insert_word_get_id(&mut self, word: &str) -> Result<i64, BackendError> {
+    async fn insert_word_get_id(&mut self, word: &str) -> Result<i64, Box<dyn Error>> {
         self.pool
             .execute(sqlx::query(
                 format!("INSERT OR IGNORE INTO words (word) VALUES ('{word}')").as_str(),
@@ -68,7 +68,7 @@ impl DB {
         Ok(id)
     }
 
-    async fn insert_tag_get_id(&mut self, tag: &str) -> Result<i64, BackendError> {
+    async fn insert_tag_get_id(&mut self, tag: &str) -> Result<i64, Box<dyn Error>> {
         self.pool
             .execute(sqlx::query(
                 format!("INSERT OR IGNORE INTO tags (tag) VALUES ('{tag}')").as_str(),
@@ -84,7 +84,7 @@ impl DB {
         Ok(id)
     }
 
-    async fn insert_word_tag(&mut self, word_id: i64, tag_id: i64) -> Result<(), BackendError> {
+    async fn insert_word_tag(&mut self, word_id: i64, tag_id: i64) -> Result<(), Box<dyn Error>> {
         self.pool
             .execute(sqlx::query(
                 format!(

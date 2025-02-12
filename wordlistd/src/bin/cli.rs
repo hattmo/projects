@@ -1,10 +1,12 @@
-use std::io;
+use std::error::Error;
 
 use clap::{Parser, Subcommand};
 use tokio::{
     io::{AsyncWrite, AsyncWriteExt, BufWriter},
     net::UnixStream,
 };
+
+use wordlistd;
 
 #[derive(Parser)]
 #[command()]
@@ -20,17 +22,21 @@ enum Command {
     Get { tags: Vec<String> },
 }
 
-pub async fn main() -> Result<(), CliError> {
-    println!("client mode");
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn Error>> {
     let conn = UnixStream::connect("./sock").await?;
     match Args::parse().command {
         Command::Add { word, tags } => handle_add(&word, &tags, &mut BufWriter::new(conn)).await?,
-        Command::Get { tags } => todo!(),
+        Command::Get { tags: _tags } => todo!(),
     }
     Ok(())
 }
 
-async fn handle_add<T, S>(word: &str, tags: &[S], conn: &mut BufWriter<T>) -> Result<(), CliError>
+async fn handle_add<T, S>(
+    word: &str,
+    tags: &[S],
+    conn: &mut BufWriter<T>,
+) -> Result<(), Box<dyn Error>>
 where
     T: AsyncWrite + Unpin,
     S: AsRef<str>,
@@ -44,13 +50,4 @@ where
     }
     conn.write_all(b"\n").await?;
     Ok(())
-}
-
-pub enum CliError {
-    Io(io::Error),
-}
-impl From<io::Error> for CliError {
-    fn from(value: io::Error) -> Self {
-        Self::Io(value)
-    }
 }
