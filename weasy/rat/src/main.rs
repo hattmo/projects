@@ -1,6 +1,8 @@
 use std::{
     io::{self, BufReader, BufWriter, Read, Write},
     net::ToSocketAddrs,
+    path::PathBuf,
+    process::Command,
     time::Duration,
 };
 
@@ -18,6 +20,42 @@ enum ConnectError {
     InvalidServerName,
     BadPrivateKey,
     BadConfig,
+}
+enum Request {
+    Exec(Exec),
+    PutFile(PutFile),
+    GetFile(GetFile),
+    OpenFile(OpenFile),
+    CloseFile(CloseFile),
+    Read(Read),
+    Write(Write),
+    LocalForward(LocalForward),
+    RemoteForward(RemoteForward),
+    Shutdown,
+    Config(Config),
+}
+
+struct Exec {
+    command: String,
+    args: Vec<String>,
+    env: ExecEnv,
+    current_dir: Option<PathBuf>,
+    uid: Option<u32>,
+    guid: Option<u32>,
+}
+
+struct ExecEnv {
+    add: Vec<(String, String)>,
+    remove: Option<Remove>,
+}
+
+enum Remove {
+    Delete(Vec<String>),
+    Clear,
+}
+
+fn run_command() {
+    todo!()
 }
 
 struct Connection {}
