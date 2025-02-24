@@ -12,46 +12,30 @@ mod server;
 use client::client_start;
 use server::server_start;
 
-use std::{borrow::Cow, fmt::Display, io::Result as IoResult, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, fmt::Display, io::Result as IoResult};
 
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
+type FileList = HashMap<String, [u8; 32]>;
+type FileEntry = (String, [u8; 32]);
 #[derive(Serialize, Deserialize)]
 enum Proto {
-    FileList(Arc<[FileEntry]>),
-    FileChunk(FileChunk),
+    FileList(FileList),
     Available,
     Transfer(FileEntry),
-}
-
-#[derive(Serialize, Deserialize)]
-struct FileChunk {
-    name: String,
-    chunk: u64,
-    content: Vec<u8>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-struct FileEntry {
-    hash: Vec<u8>,
-    size: u128,
-    name: String,
 }
 
 impl Display for Proto {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text: Cow<str> = match self {
             Proto::FileList(list) => {
-                let list: Vec<String> = list.into_iter().map(|i| i.name.clone()).collect();
+                let list: Vec<&str> = list.into_iter().map(|(name, _)| name.as_str()).collect();
                 let list = list.join(",");
                 format!("File List: [{list}]").into()
             }
-            Proto::FileChunk(file_chunk) => {
-                format!("File Chunk: {} ({})", file_chunk.name, file_chunk.chunk).into()
-            }
             Proto::Available => "Available".into(),
-            Proto::Transfer(file_entry) => format!("Transfer: {}", file_entry.name).into(),
+            Proto::Transfer((name, _)) => format!("Transfer: {}", name).into(),
         };
         write!(f, "{text}")
     }
