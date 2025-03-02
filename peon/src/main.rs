@@ -75,7 +75,6 @@ impl ServerConn {
         let conn = ClientConnection::new(config.into(), server_name).to_io()?;
         let sock = TcpStream::connect(server)?;
         let stream = StreamOwned::new(conn, sock);
-
         Ok(ServerConn { stream })
     }
 }

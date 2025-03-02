@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize};
 
 type FileList = HashMap<String, [u8; 32]>;
 type FileEntry = (String, [u8; 32]);
+
 #[derive(Serialize, Deserialize)]
 enum Proto {
     FileList(FileList),

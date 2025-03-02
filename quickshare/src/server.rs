@@ -9,10 +9,8 @@ use std::{
         unix::ffi::OsStrExt,
     },
     path::Path,
-    sync::{
-        mpsc::{Receiver, Sender},
-        RwLock,
-    },
+    sync::RwLock,
+    time::Duration,
 };
 
 use libc::{
@@ -32,29 +30,10 @@ pub fn server_start() -> IoResult<()> {
     let sock = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 1234))?;
     sock.set_broadcast(true)?;
     info!("Server started");
-    let (tx, rx) = std::sync::mpsc::channel();
     std::thread::scope(|t| {
-        t.spawn(|| listen_job(&sock, tx, &file_list));
+        t.spawn(|| listen_job(&sock, &file_list));
         t.spawn(|| watch_job(&cwd, &file_list));
-        t.spawn(|| send_job(&cwd, rx));
     });
-    Ok(())
-}
-
-fn send_job(root: &Path, rx: Receiver<(String, SocketAddr)>) -> IoResult<()> {
-    for (name, to) in rx {
-        let mut file = File::open(root.join(&name))?;
-        let mut stream = match TcpStream::connect(to) {
-            Ok(stream) => stream,
-            Err(err) => {
-                error!("{err}");
-                continue;
-            }
-        };
-        if let Err(err) = io::copy(&mut file, &mut stream) {
-            error!("{err}");
-        };
-    }
     Ok(())
 }
 
@@ -141,22 +120,23 @@ fn watch_job(root: &Path, file_list: &RwLock<FileList>) -> IoResult<()> {
     }
 }
 
-fn listen_job(
-    sock: &UdpSocket,
-    tx: Sender<(String, SocketAddr)>,
-    files: &RwLock<FileList>,
-) -> IoResult<()> {
+fn listen_job(sock: &UdpSocket, files: &RwLock<FileList>) -> IoResult<()> {
     for (mess, addr) in MessageStream(&sock) {
         match mess {
             Proto::Available => {
                 info!("Got available request");
-                send_file_list(&sock, files, addr);
+                send_file_list(&sock, files);
             }
             Proto::Transfer((name, hash)) => {
                 info!("Got transfer request");
-                let Ok(lock) = files.read() else { continue };
-                lock.iter().find(|(n, h)| **n == name && **h == hash);
-                tx.send((name, addr)).map_err(|err| io::Error::other(err))?;
+                let lock = files.read().map_err(|e| io::Error::other(e.to_string()))?;
+                if lock
+                    .iter()
+                    .find(|(n, h)| **n == name && **h == hash)
+                    .is_some()
+                {
+                    send_file()
+                };
             }
             _ => {
                 info!(%mess, "Invalid message");
@@ -166,7 +146,7 @@ fn listen_job(
     Ok(())
 }
 
-fn send_file_list(sock: &UdpSocket, files: &RwLock<FileList>, to_addr: SocketAddr) {
+fn send_file_list(sock: &UdpSocket, files: &RwLock<FileList>) {
     let lock = files.read().unwrap();
     let packet = Proto::FileList(lock.clone());
     let buf = bincode::serialize(&packet).unwrap();
