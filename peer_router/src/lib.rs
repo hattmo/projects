@@ -94,7 +94,7 @@ pub struct Router<'a, const MAX_PACKET: usize> {
     id: u64,
     route_table: [Option<Route>; 128],
     link_state: [Option<InterfaceState>; 32],
-    packet_buffers: &mut [[u8; MAX_PACKET]],
+    packet_buffers: &'a mut [[u8; MAX_PACKET]],
 }
 
 pub enum RouterError {
@@ -109,18 +109,18 @@ impl From<SignatureError> for RouterError {
 
 struct CreateLinkError;
 
-impl<'a, const MAX_PACKET> Router<'a, MAX_PACKET> {
+impl<'a, const MAX_PACKET: usize> Router<'a, MAX_PACKET> {
     pub fn new(
         id: u64,
         key: &[u8; 64],
         sig: &[u8; 64],
         ca: &[u8; 32],
-        buffers: &mut [u8],
+        buffers: &'a mut [u8],
     ) -> Result<Self, RouterError> {
         let cert = SigningKey::from_keypair_bytes(key)?;
         let ca = VerifyingKey::from_bytes(ca)?;
         let sig = Signature::from_bytes(sig);
-        let (_, packet_buffers, _) = unsafe { buffers.align_to_mut::<[u8; 1000]>() };
+        let (_, packet_buffers, _) = unsafe { buffers.align_to_mut::<[u8; MAX_PACKET]>() };
         Result::Ok(Self {
             id,
             cert,
@@ -132,58 +132,16 @@ impl<'a, const MAX_PACKET> Router<'a, MAX_PACKET> {
     }
 
     pub fn process(&mut self) {
-        for i in 0..self.inbound_packets.len() {
-            let Some(inbound) = &mut self.inbound_packets[i] else {
-                continue;
-            };
-            if inbound.read == true {
-                continue;
-            }
-
-            if inbound.dst == self.id {
-                todo!("handle arrived packets");
-            }
-            let Some(outbound) = &mut self.outbound_packets[0] else {
-                continue;
-            };
-
-            let routes = &mut self.route_table;
-            let dst = inbound.dst;
-            let src = inbound.src;
-            routes
-                .iter_mut()
-                .filter_map(|i| i.as_mut())
-                .filter(|i| i.to == dst);
-        }
+        todo!()
     }
 
     pub fn create_link(&mut self, buffer: &'a mut [u8]) -> Result<LinkHandle, CreateLinkError> {
-        let (index, _) = self
-            .inbound_packets
-            .iter_mut()
-            .enumerate()
-            .find(|(_, i)| i.is_none())
-            .ok_or(CreateLinkError)?;
-        let (inbound_buffer, outbound_buffer) = buffer.split_at_mut(buffer.len() / 2);
-        self.inbound_packets[index] = Some(DataPacket::new(inbound_buffer));
-        self.outbound_packets[index] = Some(DataPacket::new(outbound_buffer));
-        Ok(LinkHandle(index))
+        todo!()
     }
 
-  
     pub fn get_link(&'a mut self, &LinkHandle(handle): &LinkHandle) -> Option<Interface> {
-        let in_packet = self.inbound_packets[handle].as_mut()?;
-        let out_packet = self.outbound_packets[handle].as_mut()?;
-        let state = self.link_state[handle].as_mut()?;
-        Some(Interface {
-            in_packet,
-            out_packet,
-            state,
-        })
+        todo!()
     }
-
-
-
 }
 
 #[cfg(test)]
