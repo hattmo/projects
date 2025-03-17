@@ -1,4 +1,0 @@
-[env]
-MONGO_URI = "mongodb://root:password@localhost:27017"
-PORT = "8000"
-HOST = "localhost"

@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package service;
+
+import "google/protobuf/empty.proto";
+
+service GreatHall {
+  rpc GetCommands(google.protobuf.Empty) returns (stream Command);
+  rpc SendLogs(Log) returns (google.protobuf.Empty);
+}
+
+message Command {
+  int32 foo = 1;
+}
+
+message Log {
+  int32 bar = 1;
+}

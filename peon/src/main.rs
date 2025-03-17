@@ -1,26 +1,24 @@
+mod proto {
+    tonic::include_proto!("service");
+}
+
 use std::{
     error::Error,
-    fs::File,
-    io::{self, prelude::*, Read, Result as IoResult},
-    net::TcpStream,
+    io::{self, Result as IoResult},
     os::{
         fd::OwnedFd,
         linux::net::SocketAddrExt,
-        unix::net::{SocketAddr, UnixListener},
+        unix::net::{SocketAddr, UnixListener, UnixStream as StdUnixStream},
     },
     path::Path,
     process::{Child, ChildStderr, ChildStdout, Command, Stdio},
-    sync::{LazyLock, Mutex},
 };
 
-use rustls::{
-    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer, ServerName},
-    ClientConnection, RootCertStore, StreamOwned,
-};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
+use tokio::net::UnixStream as TokioUnixStream;
 
-const RAND: LazyLock<Mutex<File>> =
-    LazyLock::new(|| Mutex::new(File::open("/dev/urandom").unwrap()));
+use proto::great_hall_client::GreatHallClient;
 
 #[derive(Serialize, Deserialize)]
 enum Protocol {
@@ -39,43 +37,14 @@ enum Level {
     Error,
     Info,
 }
-fn main() {
-    let proto = Protocol::Log {
-        level: Level::Error,
-        id: "Test".to_owned(),
-        log: "Hello world".into(),
-    };
-    let proto_str = serde_json::to_string(&proto).unwrap();
-    println!("{proto_str}");
-}
 
-struct ServerConn {
-    stream: StreamOwned<ClientConnection, TcpStream>,
-}
-
-impl ServerConn {
-    pub fn new(
-        server: &str,
-        ca_cert: &Path,
-        client_cert: &Path,
-        client_key: &Path,
-    ) -> IoResult<Self> {
-        let mut ca_store = RootCertStore::empty();
-        ca_store
-            .add(CertificateDer::from_pem_file(ca_cert).to_io()?)
-            .to_io()?;
-
-        let client_cert = vec![CertificateDer::from_pem_file(client_cert).to_io()?];
-        let client_key = PrivateKeyDer::from_pem_file(client_key).to_io()?;
-        let config = rustls::ClientConfig::builder()
-            .with_root_certificates(ca_store)
-            .with_client_auth_cert(client_cert, client_key)
-            .to_io()?;
-        let server_name = ServerName::try_from(server.to_owned()).to_io()?;
-        let conn = ClientConnection::new(config.into(), server_name).to_io()?;
-        let sock = TcpStream::connect(server)?;
-        let stream = StreamOwned::new(conn, sock);
-        Ok(ServerConn { stream })
+#[tokio::main]
+async fn main() {
+    let worker = Worker::new(Path::new("/foo/bar"), [].as_slice());
+    let mut client = GreatHallClient::connect("foo.com").await.unwrap();
+    let mut commands = client.get_commands(()).await.unwrap().into_inner();
+    while let Ok(Some(command)) = commands.message().await {
+        command.
     }
 }
 
@@ -89,7 +58,7 @@ struct Worker {
 impl Worker {
     pub fn new(path: &Path, args: &[&str]) -> IoResult<Self> {
         let mut name = [0u8; 20];
-        RAND.lock().unwrap().read_exact(&mut name[..])?;
+        rand::thread_rng().fill(&mut name);
         let addr = SocketAddr::from_abstract_name(&name)?;
         let sock: OwnedFd = UnixListener::bind_addr(&addr)?.into();
         let mut child = Command::new(path)
@@ -106,6 +75,12 @@ impl Worker {
             err_log_stream,
             child,
         })
+    }
+    pub fn connect(&self) -> IoResult<TokioUnixStream> {
+        let conn = StdUnixStream::connect_addr(&self.addr)?;
+        conn.set_nonblocking(true)?;
+        let conn = TokioUnixStream::from_std(conn)?;
+        Ok(conn)
     }
 }
 

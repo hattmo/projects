@@ -1,6 +1,0 @@
-<?xml version="1.0" ?>
-<!DOCTYPE message [
-    <!ENTITY % ext SYSTEM "http://192.168.49.64:8000/static/external.dtd">
-    %ext;
-]>
-<message></message>
