@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+libc = "0.2.171"
 prost = "0.13.5"
 rand = "0.8.5"
 serde = { version = "1.0.215", features = ["derive"] }

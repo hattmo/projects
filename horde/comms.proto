@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package service;
+
+import "google/protobuf/empty.proto";
+
+service GreatHall {
+  rpc GetCommands(google.protobuf.Empty) returns (stream Command);
+  rpc CompleteCommand(CommandComplete) returns (google.protobuf.Empty);
+  rpc SendOutput(Output) returns (google.protobuf.Empty);
+  rpc SendLogs(Log) returns (google.protobuf.Empty);
+}
+
+
+
+message Command {
+  sfixed64 id = 1;
+  string module = 2;
+  repeated string args = 3;
+  map<string, string> env = 4;
+  bool preserve_env = 5;
+  bytes command = 6;
+}
+
+message CommandComplete {
+  sfixed64 id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message Output {
+  sfixed64 parent = 1;
+  bytes output = 2;
+}
+
+enum LogLevel {
+  TRACE = 0;
+  DEBUG = 1;
+  INFO = 2;
+  WARN = 3;
+  ERROR = 4;
+}
+
+message Log {
+  LogLevel level = 1;
+  uint64 context = 2;
+  string text = 3;
+}

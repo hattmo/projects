@@ -3,49 +3,42 @@ mod proto {
 }
 
 use std::{
+    collections::HashMap,
     error::Error,
+    ffi::{OsStr, OsString},
     io::{self, Result as IoResult},
     os::{
         fd::OwnedFd,
         linux::net::SocketAddrExt,
-        unix::net::{SocketAddr, UnixListener, UnixStream as StdUnixStream},
+        unix::{
+            net::{SocketAddr, UnixListener, UnixStream as StdUnixStream},
+            process::CommandExt,
+        },
     },
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, ChildStderr, ChildStdout, Command, Stdio},
 };
 
+use libc::MNT_DETACH;
 use rand::Rng;
-use serde::{Deserialize, Serialize};
 use tokio::net::UnixStream as TokioUnixStream;
 
 use proto::great_hall_client::GreatHallClient;
 
-#[derive(Serialize, Deserialize)]
-enum Protocol {
-    Log {
-        level: Level,
-        id: String,
-        log: Vec<u8>,
-    },
-    Request {
-        id: String,
-        data: Vec<u8>,
-    },
-}
-#[derive(Serialize, Deserialize)]
-enum Level {
-    Error,
-    Info,
-}
-
 #[tokio::main]
 async fn main() {
-    let worker = Worker::new(Path::new("/foo/bar"), [].as_slice());
+    //let worker = Worker::new(Path::new("/foo/bar"), [].as_slice());
     let mut client = GreatHallClient::connect("foo.com").await.unwrap();
     let mut commands = client.get_commands(()).await.unwrap().into_inner();
-    while let Ok(Some(command)) = commands.message().await {
-        command.
-    }
+    while let Ok(Some(proto::Command {
+        command,
+        id,
+        module,
+        args,
+        env,
+        preserve_env,
+    })) = commands.message().await
+    {}
 }
 
 struct Worker {
@@ -56,19 +49,32 @@ struct Worker {
 }
 
 impl Worker {
-    pub fn new(path: &Path, args: &[&str]) -> IoResult<Self> {
+    pub fn new(
+        path: impl AsRef<Path>,
+        command: impl AsRef<OsStr>,
+        args: impl IntoIterator<Item = impl AsRef<OsStr>>,
+        envs: impl IntoIterator<Item = (impl AsRef<OsStr>, impl AsRef<OsStr>)>,
+        clean_env: bool,
+    ) -> IoResult<Self> {
         let mut name = [0u8; 20];
         rand::thread_rng().fill(&mut name);
         let addr = SocketAddr::from_abstract_name(&name)?;
         let sock: OwnedFd = UnixListener::bind_addr(&addr)?.into();
-        let mut child = Command::new(path)
+        let mut child = Command::new(command);
+        if clean_env {
+            child.env_clear();
+        }
+        child
             .args(args)
+            .envs(envs)
             .stdin(sock)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .spawn()?;
-        let err_log_stream = child.stderr.take().to_io()?;
-        let log_stream = child.stdout.take().to_io()?;
+            .current_dir(path)
+            .process_group(0);
+        let mut child = unsafe { child.pre_exec(move || setup_jail()).spawn()? };
+        let err_log_stream = Option::take(&mut child.stderr).to_io()?;
+        let log_stream = Option::take(&mut child.stdout).to_io()?;
         Ok(Worker {
             addr,
             log_stream,
@@ -82,6 +88,15 @@ impl Worker {
         let conn = TokioUnixStream::from_std(conn)?;
         Ok(conn)
     }
+}
+
+fn setup_jail() -> Result<(), io::Error> {
+    unsafe {
+        libc::unshare(libc::CLONE_NEWNS);
+        libc::syscall(libc::SYS_pivot_root, c".".as_ptr(), c".".as_ptr());
+        libc::umount2(c".".as_ptr(), MNT_DETACH);
+    }
+    Ok(())
 }
 
 trait ToIoResult<T> {
