@@ -1,12 +1,45 @@
 mod chat;
 
-use axum::{extract::MatchedPath, http::Request, response::IntoResponse, routing::*, Form};
-use ngrok::{prelude::TunnelBuilder, tunnel::UrlTunnel};
+use axum::{
+    extract::MatchedPath, http::Request, response::IntoResponse, routing::*, serve::Listener, Form,
+};
+use futures::StreamExt;
+use ngrok::{
+    prelude::TunnelBuilder,
+    tunnel::{HttpTunnel, UrlTunnel},
+    Conn,
+};
 use serde::Deserialize;
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, future::Future, net::SocketAddr, str::FromStr};
 use tower_http::trace::TraceLayer;
 use tracing::info_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+struct NgrokProxy {
+    tun: HttpTunnel,
+}
+
+impl NgrokProxy {
+    async fn get_next_conn(&mut self) -> (Conn, SocketAddr) {
+        let conn = self.tun.next().await.unwrap().unwrap();
+        let remote = conn.remote_addr();
+        (conn, remote)
+    }
+}
+
+impl Listener for NgrokProxy {
+    type Io = Conn;
+
+    type Addr = SocketAddr;
+
+    fn accept(&mut self) -> impl Future<Output = (Self::Io, Self::Addr)> + Send {
+        self.get_next_conn()
+    }
+
+    fn local_addr(&self) -> tokio::io::Result<Self::Addr> {
+        SocketAddr::from_str("0.0.0.0:0").map_err(tokio::io::Error::other)
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -71,9 +104,8 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     tracing::info!("Starting server");
-    axum::Server::builder(tun)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .await?;
+
+    axum::serve::serve(NgrokProxy { tun }, app).await?;
     Ok(())
 }
 
@@ -155,7 +187,7 @@ mod global {
     use tokio::sync::OnceCell;
 
     static CHATS: OnceCell<Chats> = OnceCell::const_new();
-    pub(crate) async fn chat(id: String, request: String) -> Option<String> {
+    pub async fn chat(id: String, request: String) -> Option<String> {
         CHATS
             .get_or_init(|| async { Chats::new() })
             .await
@@ -163,7 +195,7 @@ mod global {
             .await
     }
 
-    pub(crate) async fn clear_chat(id: String) {
+    pub async fn clear_chat(id: String) {
         CHATS
             .get_or_init(|| async { Chats::new() })
             .await
