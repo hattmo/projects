@@ -31,7 +31,7 @@ impl Chat {
             client: Client::new(),
             chats: vec![Message {
                 role: "system".to_string(),
-                content: "You are a helpful assistant.".to_string(),
+                content: "You are a helpful assistant. Keep your answers concise.".to_string(),
             }],
         }
     }
@@ -42,11 +42,11 @@ impl Chat {
         });
         let res = self
             .client
-            .post("https://api.openai.com/v1/chat/completions")
+            .post("https://api.perplexity.ai/chat/completions")
             .header("Content-Type", "application/json")
             .header("Authorization", key)
             .json(&serde_json::json!({
-                "model": "gpt-3.5-turbo",
+                "model": "sonar",
                 "messages": self.chats,
             }))
             .send()

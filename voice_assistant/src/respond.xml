@@ -1,5 +1,5 @@
 <Response>
-    <Gather input="speech" enhanced="true" speechModel="phone_call" action="/converse">
+    <Gather input="speech" enhanced="true" speechModel="phone_call" action="/converse" speechTimeout="2">
         <Say>{}</Say>
     </Gather>
     <Redirect>

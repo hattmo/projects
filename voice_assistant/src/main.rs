@@ -1,5 +1,6 @@
 mod chat;
 
+use anyhow::anyhow;
 use axum::{
     extract::MatchedPath, http::Request, response::IntoResponse, routing::*, serve::Listener, Form,
 };
@@ -98,10 +99,11 @@ async fn main() -> anyhow::Result<()> {
         .form(&fields)
         .send()
         .await?;
+    tracing::info!(?response, "Sent twilio request");
     if response.status().is_success() {
         tracing::info!("Callback configured successfully!")
     } else {
-        return Ok(());
+        return Err(anyhow!("Failed to configure twilio"));
     }
     tracing::info!("Starting server");
 
@@ -136,7 +138,8 @@ async fn converse(Form(data): Form<RequestData>) -> impl IntoResponse {
     }
     if let Some(input) = data.speech_result {
         let output = global::chat(data.call_sid, input).await;
-        if let Some(output) = output {
+        if let Some(mut output) = output {
+            output += "\n\nDo you need additional assistance?";
             return util::respond(&output);
         } else {
             return util::respond("Something went wrong. Please try again.");
