@@ -69,14 +69,18 @@ async fn send_keys(
     vm_id: &str,
     keys: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let key_codes: String = keys
+    let key_codes: Box<[String]> = keys
         .chars()
         .into_iter()
         .filter_map(|c| c.as_ascii())
         .map(|c| c.to_u8().to_string())
-        .collect::<Box<[String]>>()
-        .join(" ");
-    let body = format!(include_str!("./envelope.txt"), vm_id, key_codes);
+        .collect();
+    let key_codes_len = key_codes.len();
+    let key_codes = key_codes.join(" ");
+    let body = format!(
+        include_str!("./envelope.txt"),
+        vm_id, key_codes, key_codes_len
+    );
     println!("{body}");
     let res = client
         .post(format!("https://{host}/sdk"))

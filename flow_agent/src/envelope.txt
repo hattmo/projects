@@ -5,6 +5,7 @@
       <urn:_this type="VirtualMachine">{}</urn:_this>
       <urn:spec>
         <urn:scanCodes>{}</urn:scanCodes>
+	<urn:length>{}</urn:length>
       </urn:spec>
     </urn:PutUsbScanCodes>
   </soapenv:Body>
