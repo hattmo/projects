@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:vim25">
+  <soapenv:Body>
+    <urn:PutUsbScanCodes>
+      <urn:_this type="VirtualMachine">{}</urn:_this>
+      <urn:spec>
+        <urn:scanCodes>{}</urn:scanCodes>
+      </urn:spec>
+    </urn:PutUsbScanCodes>
+  </soapenv:Body>
+</soapenv:Envelope>

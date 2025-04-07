@@ -44,33 +44,33 @@ pub struct AuthenticationPacket<'a> {
 
 pub struct LinkHandle(usize);
 
-enum LinkState {
+enum InterfaceState {
     Authenticating(VerifyingKey, SigningKey),
-    Sharing,
+    Sharing(),
     Up(Aes128Gcm),
     Dead,
 }
 
-pub struct Link<'a> {
-    state: &'a mut LinkState,
+pub struct Interface<'a> {
+    state: &'a mut InterfaceState,
     out_packet: &'a mut DataPacket<'a>,
     in_packet: &'a mut DataPacket<'a>,
 }
 
-impl<'a> Link<'a> {
+impl<'a> Interface<'a> {
     pub fn push_data(&mut self, in_buf: &[u8]) {
         todo!()
     }
     pub fn pull_data(&mut self, out_buf: &mut [u8]) {
         match self.state {
-            LinkState::Authenticating(verify, sign) => {
+            InterfaceState::Authenticating(verify, sign) => {
                 let public = sign.verifying_key();
                 let res = sign.sign(public.as_bytes());
-                *self.state = LinkState::Dead;
+                *self.state = InterfaceState::Dead;
             }
-            LinkState::Sharing() => todo!(),
-            LinkState::Up(_) => todo!(),
-            LinkState::Dead => todo!(),
+            InterfaceState::Sharing() => todo!(),
+            InterfaceState::Up(_) => todo!(),
+            InterfaceState::Dead => todo!(),
         }
         todo!()
     }
@@ -93,7 +93,7 @@ pub struct Router<'a, const MAX_PACKET: usize> {
     ca: VerifyingKey,
     id: u64,
     route_table: [Option<Route>; 128],
-    link_state: [Option<LinkState>; 32],
+    link_state: [Option<InterfaceState>; 32],
     packet_buffers: &mut [[u8; MAX_PACKET]],
 }
 
@@ -170,20 +170,20 @@ impl<'a, const MAX_PACKET> Router<'a, MAX_PACKET> {
         Ok(LinkHandle(index))
     }
 
-    pub fn bind_app(&mut self, app_id: u64) {
-        todo!()
-    }
-
-    pub fn get_link(&'a mut self, &LinkHandle(handle): &LinkHandle) -> Option<Link> {
+  
+    pub fn get_link(&'a mut self, &LinkHandle(handle): &LinkHandle) -> Option<Interface> {
         let in_packet = self.inbound_packets[handle].as_mut()?;
         let out_packet = self.outbound_packets[handle].as_mut()?;
         let state = self.link_state[handle].as_mut()?;
-        Some(Link {
+        Some(Interface {
             in_packet,
             out_packet,
             state,
         })
     }
+
+
+
 }
 
 #[cfg(test)]
