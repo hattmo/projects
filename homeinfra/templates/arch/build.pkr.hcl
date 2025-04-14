@@ -23,28 +23,30 @@ source "vsphere-iso" "arch-base" {
   cpu_cores = 4
   RAM       = 32768
 
+  firmware  = "efi"
+
   network_adapters {
     network_card = "vmxnet3"
-    network      = "LAN"
+    network      = "Trusted LAN"
   }
 
   storage {
-    disk_size             = 65536
+    disk_size             = 32768
     disk_thin_provisioned = true
   }
   guest_os_type = "other4xLinuxGuest"
 
-  iso_url      = "https://geo.mirror.pkgbuild.com/iso/2023.09.01/archlinux-2023.09.01-x86_64.iso"
-  iso_checksum = "0d71c9bc56af75c07e89cd41eaa5570ac914677ad6bc8e84935dc720ce58f960"
+  iso_url      = "https://mirror.rackspace.com/archlinux/iso/latest/archlinux-x86_64.iso"
+  iso_checksum = "file:https://mirror.rackspace.com/archlinux/iso/latest/sha256sums.txt"
 
   boot_wait = "1s"
   boot_command = [
     "e",
-    "<tab><wait2>",
+    "<end><wait2>",
     " ds=nocloud",
     "<enter>"
   ]
-  shutdown_command = "sudo shutdown -h now"
+  shutdown_command = "sudo poweroff"
 
   floppy_content = {
     "user-data" = file("./user-data.pktpl.hcl"),
@@ -66,21 +68,23 @@ build {
   ]
 
   provisioner "file" {
-    sources      = ["provision.sh", "fdisk_script", "in_chroot.sh", "loader.conf","arch.conf"]
+    sources      = ["provision.sh", "fdisk_script", "in_chroot.sh", "loader.conf","arch.conf", "mkinitcpio.conf"]
     destination = "/home/arch/"
   }
+  
+  provisioner "breakpoint" {
+    disable = true
+  }
+
   provisioner "shell" {
     inline = ["chmod +x ~/provision.sh", "sudo ~/provision.sh"]
-  }
-  provisioner "breakpoint" {
-    disable = false
   }
 }
 
 packer {
   required_plugins {
     vsphere = {
-      version = ">= 0.0.1"
+      version = "~> 1"
       source  = "github.com/hashicorp/vsphere"
     }
   }
