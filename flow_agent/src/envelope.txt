@@ -1,12 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:vim25">
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:vim25="urn:vim25">
+  <soapenv:Header>
+    <!-- Insert session authentication header here -->
+  </soapenv:Header>
   <soapenv:Body>
-    <urn:PutUsbScanCodes>
-      <urn:_this type="VirtualMachine">{}</urn:_this>
-      <urn:spec>
-        <urn:scanCodes>{}</urn:scanCodes>
-	<urn:length>{}</urn:length>
-      </urn:spec>
-    </urn:PutUsbScanCodes>
+    <vim25:SendUsbScanCodes>
+      <_this type="VirtualMachine">{}</_this>
+      <spec>
+        <keyEvents>
+          <usbHidCode>0x0b</usbHidCode> <!-- 'h' key -->
+        </keyEvents>
+        <keyEvents>
+          <usbHidCode>0x08</usbHidCode> <!-- 'e' key -->
+        </keyEvents>
+        <keyEvents>
+          <usbHidCode>0x0f</usbHidCode> <!-- 'l' key -->
+        </keyEvents>
+        <keyEvents>
+          <usbHidCode>0x0f</usbHidCode> <!-- 'l' key -->
+        </keyEvents>
+        <keyEvents>
+          <usbHidCode>0x12</usbHidCode> <!-- 'o' key -->
+        </keyEvents>
+      </spec>
+    </vim25:SendUsbScanCodes>
   </soapenv:Body>
 </soapenv:Envelope>
