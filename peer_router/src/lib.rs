@@ -42,7 +42,7 @@ pub struct AuthenticationPacket<'a> {
     dh_sig: &'a Signature,
 }
 
-pub struct LinkHandle(usize);
+pub struct InterfaceHandle(usize);
 
 enum InterfaceState {
     Authenticating(VerifyingKey, SigningKey),
@@ -51,7 +51,8 @@ enum InterfaceState {
     Dead,
 }
 
-pub struct Interface<'a> {
+pub struct Interface<'a, MAX_PACKET> {
+    router: &'a mut Router<MAX_PACKET>,
     state: &'a mut InterfaceState,
     out_packet: &'a mut DataPacket<'a>,
     in_packet: &'a mut DataPacket<'a>,
@@ -78,13 +79,13 @@ impl<'a> Interface<'a> {
 
 struct Route {
     to: u64,
-    via: u8,
+    via: u16,
     hops: u8,
 }
 
 impl Route {
-    fn new(dst: u64, via: u8, hops: u8) -> Self {
-        Self { to: dst, via, hops }
+    fn new(to: u64, via: u8, hops: u8) -> Self {
+        Self { to, via, hops }
     }
 }
 
@@ -135,11 +136,17 @@ impl<'a, const MAX_PACKET: usize> Router<'a, MAX_PACKET> {
         todo!()
     }
 
-    pub fn create_link(&mut self, buffer: &'a mut [u8]) -> Result<LinkHandle, CreateLinkError> {
+    pub fn create_interface(
+        &mut self,
+        buffer: &'a mut [u8],
+    ) -> Result<InterfaceHandle, CreateLinkError> {
         todo!()
     }
 
-    pub fn get_link(&'a mut self, &LinkHandle(handle): &LinkHandle) -> Option<Interface> {
+    pub fn destroy_interface(link: InterfaceHandle) {
+        todo!()
+    }
+    pub fn get_link(&'a mut self, &InterfaceHandle(handle): &InterfaceHandle) -> Option<Interface> {
         todo!()
     }
 }

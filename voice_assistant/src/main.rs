@@ -6,12 +6,14 @@ use axum::{
 };
 use futures::StreamExt;
 use ngrok::{
+    conn::ConnInfo,
     prelude::TunnelBuilder,
-    tunnel::{HttpTunnel, UrlTunnel},
-    Conn,
+    tunnel::{EndpointInfo, HttpTunnel},
+    EndpointConn,
 };
 use serde::Deserialize;
-use std::{collections::HashMap, future::Future, net::SocketAddr, str::FromStr};
+use std::{collections::HashMap, net::SocketAddr, str::FromStr, time::Duration};
+use tokio::time::sleep;
 use tower_http::trace::TraceLayer;
 use tracing::info_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -20,21 +22,25 @@ struct NgrokProxy {
     tun: HttpTunnel,
 }
 
-impl NgrokProxy {
-    async fn get_next_conn(&mut self) -> (Conn, SocketAddr) {
-        let conn = self.tun.next().await.unwrap().unwrap();
-        let remote = conn.remote_addr();
-        (conn, remote)
-    }
-}
-
 impl Listener for NgrokProxy {
-    type Io = Conn;
+    type Io = EndpointConn;
 
     type Addr = SocketAddr;
 
-    fn accept(&mut self) -> impl Future<Output = (Self::Io, Self::Addr)> + Send {
-        self.get_next_conn()
+    async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+        let mut backoff = 1;
+        let conn = loop {
+            match self.tun.next().await {
+                Some(Ok(conn)) => break conn,
+                Some(Err(e)) => tracing::error!(%e, "Error accepting next connection"),
+                None => tracing::error!("No more connections in stream, stream closed"),
+            }
+            tracing::error!("Waiting to try again in {backoff} seconds");
+            sleep(Duration::from_secs(backoff)).await;
+            backoff = backoff.saturating_mul(2);
+        };
+        let remote = conn.remote_addr();
+        (conn, remote)
     }
 
     fn local_addr(&self) -> tokio::io::Result<Self::Addr> {
