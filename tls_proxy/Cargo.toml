@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 rcgen = "0.13.1"
-ring = { version = "0.17.12", features = ["std"] }
+ring = { version = "0.17.13", features = ["std"] }
 rustls = { version = "0.23.19", features = ["ring"] }
 time = "0.3.36"
 tokio = { version = "1.41.1", features = ["full"] }
