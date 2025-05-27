@@ -1,11 +1,16 @@
+#![feature(iter_next_chunk)]
+
 mod proto {
     tonic::include_proto!("service");
 }
 
+mod fast_cgi;
+
+use fast_cgi::Record;
+
 use std::{
-    collections::HashMap,
     error::Error,
-    ffi::{OsStr, OsString},
+    ffi::OsStr,
     io::{self, Result as IoResult},
     os::{
         fd::OwnedFd,
@@ -15,13 +20,13 @@ use std::{
             process::CommandExt,
         },
     },
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, ChildStderr, ChildStdout, Command, Stdio},
 };
 
 use libc::MNT_DETACH;
 use rand::Rng;
-use tokio::net::UnixStream as TokioUnixStream;
+use tokio::{io::AsyncWriteExt, net::UnixStream as TokioUnixStream};
 
 use proto::great_hall_client::GreatHallClient;
 
@@ -82,10 +87,20 @@ impl Worker {
             child,
         })
     }
-    pub fn connect(&self) -> IoResult<TokioUnixStream> {
+    pub async fn connect(&self) -> IoResult<TokioUnixStream> {
         let conn = StdUnixStream::connect_addr(&self.addr)?;
         conn.set_nonblocking(true)?;
         let conn = TokioUnixStream::from_std(conn)?;
+        let start_record = Record {
+            request_id: 0,
+            content: fast_cgi::RecordType::BeginRequest {
+                role: fast_cgi::Role::Responder,
+                keep_conn: false,
+            },
+        };
+        let (header, body) = start_record.write_record().unwrap();
+        conn.write_all(header.as_ref()).await;
+        conn.write_all(body.as_ref()).await;
         Ok(conn)
     }
 }
