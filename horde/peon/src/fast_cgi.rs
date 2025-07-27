@@ -1,4 +1,75 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    collections::{HashMap, VecDeque},
+    error::Error,
+    fmt::Display,
+    io::Write,
+};
+
+struct FastCgiServerContext {
+    trasaction_id: u16,
+    open_transactions: HashMap<Transaction, TransactionState>,
+}
+
+impl FastCgiServerContext {
+    fn new_transaction(&mut self) -> Transaction {
+        self.trasaction_id = self.trasaction_id.wrapping_add(1);
+        if self.trasaction_id == 0 {
+            self.trasaction_id = self.trasaction_id.wrapping_add(1);
+        }
+        let transaction = Transaction(self.trasaction_id);
+        self.open_transactions
+            .insert(transaction, TransactionState::default());
+        transaction
+    }
+
+    fn write_stdin(&mut self, transaction: Transaction, data: &[u8]) {
+        let record = Record {
+            request_id: self.trasaction_id,
+            content: RecordType::Stdin { data },
+        };
+        let RecordBytes {
+            header,
+            content,
+            padding,
+        } = record.write_record().unwrap();
+        let mut bin = header.to_vec();
+        bin.extend(content.as_ref());
+        bin.extend(padding);
+        self.open_transactions
+            .get_mut(&transaction)
+            .unwrap()
+            .stdout
+            .push_back(bin);
+    }
+    fn write_params<'a, 'b, T>(&'a mut self, transaction: Transaction, params: T)
+    where
+        T: IntoIterator<Item = (&'b str, &'b str)>,
+    {
+        let data = params
+            .into_iter()
+            .map(|(key, val)| (key.as_ref(), val.as_ref()))
+            .collect();
+        Record {
+            request_id: self.trasaction_id,
+            content: RecordType::Params { data },
+        };
+
+        todo!()
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+struct Transaction(u16);
+
+#[derive(Default)]
+struct TransactionState {
+    out_records: VecDeque<Vec<u8>>,
+    stdout: VecDeque<Vec<u8>>,
+    stderr: VecDeque<Vec<u8>>,
+}
+
+const VERSION: u8 = 1;
 
 #[derive(Debug)]
 pub enum Role {
@@ -54,7 +125,7 @@ pub enum RecordType<'a> {
 const KEEP_CONN: u8 = 1;
 
 impl<'a> RecordType<'a> {
-    fn write_content(&self) -> Result<(u8, Cow<[u8]>), RecordError> {
+    fn write_content(&'a self) -> Result<(u8, Cow<'a, [u8]>), RecordError> {
         match self {
             RecordType::BeginRequest { role, keep_conn } => {
                 let mut begin_body = Vec::with_capacity(8);
@@ -137,6 +208,19 @@ pub enum RecordError {
     InvalidRole,
 }
 
+impl Display for RecordError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = match self {
+            RecordError::NotEnoughData => "Not Enough Data",
+            RecordError::UnknownType => "Unknown Type",
+            RecordError::InvalidRole => "Invalid Role",
+        };
+        write!(f, "{message}")
+    }
+}
+
+impl Error for RecordError {}
+
 const BEGIN_REQUEST: u8 = 1;
 const ABORT_REQUEST: u8 = 2;
 const END_REQUEST: u8 = 3;
@@ -147,6 +231,12 @@ const STDERR: u8 = 7;
 const DATA: u8 = 8;
 const GET_VALUES: u8 = 9;
 const GET_VALUES_RESULT: u8 = 10;
+
+pub struct RecordBytes<'a> {
+    pub header: [u8; 8],
+    pub content: Cow<'a, [u8]>,
+    pub padding: Vec<u8>,
+}
 
 impl<'a> Record<'a> {
     pub fn parse_record(data: &[u8]) -> Result<(Record, &[u8]), RecordError> {
@@ -200,17 +290,21 @@ impl<'a> Record<'a> {
         };
         Ok((out, rest))
     }
-    pub fn write_record(&self) -> Result<([u8; 8], Cow<[u8]>), RecordError> {
+    pub fn write_record(&self) -> Result<RecordBytes, RecordError> {
         let mut header: [u8; 8] = Default::default();
+        let mut head_writer = &mut header[..];
         let (ty, content) = self.content.write_content()?;
-        header[0] = 1;
-        header[1] = ty;
-        (&mut header[2..4]).copy_from_slice(&self.request_id.to_be_bytes());
+        head_writer.write_all(&[VERSION, ty]);
+        head_writer.write_all(&self.request_id.to_be_bytes());
         let len: u16 = content.len().try_into().unwrap();
         let padding: u8 = ((8 - (len % 8)) % 8).try_into().unwrap();
-        (&mut header[4..6]).copy_from_slice(&len.to_be_bytes());
-        header[6] = padding;
-        Ok(Default::default())
+        head_writer.write_all(&len.to_be_bytes());
+        head_writer.write_all(&[padding, 0]);
+        Ok(RecordBytes {
+            header,
+            content,
+            padding: vec![0; padding.into()],
+        })
     }
 }
 
@@ -308,13 +402,19 @@ fn parse_begin_request(content_bytes: &[u8]) -> Result<RecordType<'_>, RecordErr
 
 #[cfg(test)]
 mod test {
+    use crate::fast_cgi::RecordType;
+
     use super::Record;
 
     #[test]
     fn test_parse_record() {
-        let input = b"\x01\x05\x00\x01\x00\x0B\x03\x00hello worldfoo";
+        let input = b"\x01\x05\x00\x01\x00\x0B\x03\x00hello world\x00\x00\x00";
         let (record, rest) = Record::parse_record(input).unwrap();
         println!("{record:?}\n{rest:?}");
-        assert!(false);
+        assert_eq!(record.request_id, 1);
+        let RecordType::Stdin { data } = record.content else {
+            panic!("wrong record type")
+        };
+        assert_eq!(data, b"hello world!");
     }
 }
