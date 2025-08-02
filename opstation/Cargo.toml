@@ -12,3 +12,7 @@ env_logger = "0.10.1"
 libc = "0.2.149"
 log = "0.4.20"
 uuid = { version = "1.6.1", features = ["v4"] }
+
+[build-dependencies]
+bindgen = "0.71.0"
+cc = "1.0"
