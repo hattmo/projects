@@ -48,11 +48,10 @@ impl<'a> Peer<'a> {
         unsafe { (*self.peer).flags |= wg_peer_flags_WGPEER_HAS_PERSISTENT_KEEPALIVE_INTERVAL }
     }
 
-    pub fn add_allowed_ip(&mut self, network: &str, cidr: u8) {
+    pub fn add_allowed_ip(&mut self, network: IpAddr, cidr: u8) {
         unsafe {
             let allowed_ip: *mut wg_allowedip = calloc();
             (*allowed_ip).cidr = cidr;
-            let network: IpAddr = network.parse().unwrap();
             match network {
                 IpAddr::V4(addr) => {
                     (*allowed_ip).family = libc::AF_INET as u16;
@@ -91,24 +90,27 @@ impl<'a> Peer<'a> {
                     sin_family: libc::AF_INET as u16,
                     sin_port: addr.port().to_be(),
                     sin_addr: in_addr {
-                        s_addr: addr.ip().to_bits(),
+                        s_addr: addr.ip().to_bits().to_be(),
                     },
                     sin_zero: Default::default(),
                 },
             },
-            std::net::SocketAddr::V6(addr) => wg_endpoint {
-                addr6: sockaddr_in6 {
-                    sin6_family: libc::AF_INET6 as u16,
-                    sin6_port: addr.port(),
-                    sin6_addr: in6_addr {
-                        __in6_u: in6_addr__bindgen_ty_1 {
-                            __u6_addr8: addr.ip().octets(),
+            std::net::SocketAddr::V6(addr) => {
+                let mut ip = addr.ip().octets();
+                ip.reverse();
+                let port = addr.port().to_be();
+                wg_endpoint {
+                    addr6: sockaddr_in6 {
+                        sin6_family: libc::AF_INET6 as u16,
+                        sin6_port: port,
+                        sin6_addr: in6_addr {
+                            __in6_u: in6_addr__bindgen_ty_1 { __u6_addr8: ip },
                         },
+                        sin6_flowinfo: 0,
+                        sin6_scope_id: 0,
                     },
-                    sin6_flowinfo: 0,
-                    sin6_scope_id: 0,
-                },
-            },
+                }
+            }
         };
         unsafe { (*self.peer).endpoint = endpoint };
     }

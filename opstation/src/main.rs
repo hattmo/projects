@@ -6,7 +6,7 @@
 
 use std::{
     io::{self, stdin},
-    net::IpAddr,
+    net::{IpAddr, Ipv4Addr},
 };
 
 use manager::manager_main;
@@ -27,11 +27,17 @@ fn main() -> io::Result<()> {
     let (public, private) = generate_key_pair();
     wg_dev.set_public_key(public);
     wg_dev.set_private_key(private);
-    let mut peer = wg_dev.new_peer();
-    peer.set_endpoint("8.8.8.8:8080");
-    peer.add_allowed_ip("192.168.0.0", 24);
-    let (public, _private) = generate_key_pair();
-    peer.set_public_key(public);
+
+    for addr in (Ipv4Addr::new(192, 168, 0, 0)..Ipv4Addr::new(192, 168, 0, 255))
+        .into_iter()
+        .step_by(4)
+    {
+        let mut peer = wg_dev.new_peer();
+        peer.set_endpoint("192.168.0.1:8080");
+        peer.add_allowed_ip(addr.into(), 31);
+        let (public, _private) = generate_key_pair();
+        peer.set_public_key(public);
+    }
     wg_dev.commit();
 
     let mut buf = String::new();
