@@ -1,3 +1,2 @@
 main: nl.c
-	gcc -I/usr/include/libnl3 nl.c -o main -lnl-3 -lnl-route-3
-
+	gcc  `pkgconf --cflags libnl-route-3.0` nl.c `pkgconf --libs libnl-route-3.0` -o main
