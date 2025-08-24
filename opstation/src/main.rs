@@ -1,27 +1,25 @@
 #![feature(linux_pidfd)]
 #![feature(unix_socket_ancillary_data)]
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
 
 use std::{
     io::{self, stdin},
-    net::{IpAddr, Ipv4Addr},
+    net::Ipv4Addr,
 };
 
 use manager::manager_main;
 use server::server_main;
-use wg::WGDevice;
-
-use crate::wg::generate_key_pair;
+use wg::{generate_key_pair, WGDevice};
 
 mod manager;
+mod nl;
 mod raw;
 mod server;
 mod util;
 mod wg;
 
 fn main() -> io::Result<()> {
+    unsafe { nl::make_vx_lan() };
+    return Ok(());
     let mut wg_dev = WGDevice::new("wg0");
     wg_dev.set_listen_port(1234);
     let (public, private) = generate_key_pair();
@@ -42,7 +40,7 @@ fn main() -> io::Result<()> {
 
     let mut buf = String::new();
     stdin().read_line(&mut buf).unwrap();
-    return Ok(());
+
     // testing
     env_logger::builder()
         .filter_level(log::LevelFilter::Info)

@@ -1,0 +1,13 @@
+#include <netlink/addr.h>
+#include <netlink/errno.h>
+#include <netlink/object.h>
+#include <netlink/types.h>
+#include <netinet/in.h>
+#include <netlink/cache.h>
+#include <netlink/errno.h>
+#include <netlink/handlers.h>
+#include <netlink/netlink.h>
+#include <netlink/socket.h>
+#include <netlink/route/addr.h>
+#include <netlink/route/link.h>
+#include <netlink/route/link/vxlan.h>
