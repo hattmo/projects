@@ -101,7 +101,7 @@ async fn scan_job(job_queue: UnboundedReceiver<ScanRequest>) {
 async fn scan_worker(job_queue: Arc<Mutex<UnboundedReceiver<ScanRequest>>>) {
     while let Some(req) = job_queue.lock().await.recv().await {
         let Ok(mut child) = tokio::process::Command::new("nmap")
-            .stdin(Stdio::piped())
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .arg("-A")
@@ -114,7 +114,7 @@ async fn scan_worker(job_queue: Arc<Mutex<UnboundedReceiver<ScanRequest>>>) {
         else {
             continue;
         };
-        let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+        let Some(stdout) = child.stdout.take() else {
             let _ = child.kill().await;
             continue;
         };
