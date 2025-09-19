@@ -5,99 +5,174 @@
 //! # Nmap Scan Result
 //!
 
-mod scan_result;
-
-use axum::routing::get;
-use chrono::Local;
-use clap::{Parser, ValueEnum};
-use quick_xml::de::from_str;
-use scan_result::ScanResult;
-use std::{
-    io::{Error, ErrorKind, Result as IoResult},
-    sync::LazyLock,
-    time::Duration,
+use axum::{
+    extract::State,
+    response::{Html, IntoResponse},
+    routing::{get, post},
+    Json,
 };
-use tokio::{fs::read, net::TcpListener, process::Command, sync::RwLock};
+use clap::{Parser, ValueEnum};
+use futures::future::join;
+use quick_xml::{events::attributes::Attribute, name::QName, reader::Reader};
+use serde::Serialize;
+use std::{
+    collections::HashMap, io::Result as IoResult, process::Stdio, sync::Arc, time::Duration,
+};
 
-static LAST_SCAN: LazyLock<RwLock<ScanResult>> =
-    LazyLock::new(|| RwLock::new(ScanResult::default()));
-static ARGS: LazyLock<Arguments> = LazyLock::new(Arguments::parse);
+use tokio::{
+    io::{AsyncWriteExt, BufReader},
+    net::TcpListener,
+    spawn,
+    sync::{
+        mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+        Mutex,
+    },
+    time::sleep,
+};
+
+#[derive(serde::Deserialize, Serialize)]
+struct ScanRequest {
+    targets: Vec<String>,
+}
 
 #[tokio::main]
 async fn main() -> IoResult<()> {
-    // command
-    let timing = ARGS.timing.as_ref().unwrap_or(&Timing::Normal);
-    let mut command_args: Vec<String> = vec![
-        "-vvv",
-        "-A",
-        &timing.as_flag(),
-        "--unprivileged",
-        "-oX",
-        "scan.xml",
-    ]
-    .into_iter()
-    .map(ToOwned::to_owned)
-    .collect();
-    command_args.append(ARGS.targets.clone().as_mut());
-    let command_args = command_args.leak();
-    let cmd_str = command_args.join(" ");
-
-    // sleep
-    let sleep = ARGS.sleep.clone().unwrap_or("1d".to_owned());
-    let sleep = parse_duration::parse(&sleep).map_err(|e| Error::new(ErrorKind::Other, e))?;
-
-    // port
-    let port = ARGS.port.unwrap_or(3000);
-
-    println!("Running nmap with args: {cmd_str}");
-    println!("Will rerun every {sleep:?}");
-    println!("Listening of port: {port}");
-    let scan_job = tokio::spawn(scan_job(command_args, sleep));
-    let web_job = tokio::spawn(web_job(port));
-    scan_job.await?.unwrap();
+    let (send, recv) = unbounded_channel();
+    let scan_job = tokio::spawn(scan_job(recv));
+    let web_job = tokio::spawn(web_job(80, send));
+    scan_job.await.unwrap();
     web_job.await.unwrap();
     Ok(())
 }
 
-async fn web_job(port: u16) {
-    let app = axum::Router::new().route(
-        "/",
-        get(|| async {
-            let guard = LAST_SCAN.read().await;
-            guard.to_string()
-        }),
-    );
+async fn web_job(port: u16, job_queue: UnboundedSender<ScanRequest>) {
+    let app = axum::Router::new()
+        .route("/", get(main_route))
+        .route("/scan", post(scan_route))
+        .with_state(job_queue);
     let listener = TcpListener::bind(("0.0.0.0", port)).await.unwrap();
-    axum::serve(listener, app.into_make_service())
-        .await
-        .unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
 
-async fn scan_job(command_args: &[String], sleep: Duration) -> IoResult<()> {
-    loop {
-        println!("Starting scan at {}", Local::now());
-        let mut command = Command::new("nmap");
-        command.args(command_args);
-        let res = command.status().await?;
-        if !res.success() {
-            println!("Scan failed with status: {res}");
-        } else if let Err(e) = parse_xml().await {
-            println!("Error parsing XML: {e}");
+// #[cfg(test)]
+// mod test {
+//     use crate::ScanQuery;
+//
+//     #[test]
+//     fn test_query() {
+//         let q = ScanQuery { targets: vec![1] };
+//         let q = serde_json::to_string(&q);
+//         println!("{}", q.unwrap());
+//         assert!(false)
+//     }
+// }
+
+#[derive(askama::Template)]
+#[template(path = "index.html")]
+struct IndexTmpl {
+    foo: String,
+}
+
+async fn main_route() -> impl IntoResponse {
+    Html(
+        IndexTmpl {
+            foo: "Bar".to_string(),
+        }
+        .to_string(),
+    )
+}
+
+#[axum::debug_handler]
+async fn scan_route(
+    State(job_queue): State<UnboundedSender<ScanRequest>>,
+    Json(req): Json<ScanRequest>,
+) -> impl IntoResponse {
+    job_queue.send(req).or(Err("Bad Data"))
+}
+
+async fn scan_job(job_queue: UnboundedReceiver<ScanRequest>) {
+    let job_queue: Arc<Mutex<UnboundedReceiver<ScanRequest>>> = Arc::new(Mutex::new(job_queue));
+    let jobs: Box<[_]> = (0..4)
+        .map(|_| tokio::spawn(scan_worker(job_queue.clone())))
+        .collect();
+    futures::future::join_all(jobs).await;
+}
+
+async fn scan_worker(job_queue: Arc<Mutex<UnboundedReceiver<ScanRequest>>>) {
+    while let Some(req) = job_queue.lock().await.recv().await {
+        let Ok(mut child) = tokio::process::Command::new("nmap")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .arg("-A")
+            .arg("-oX")
+            .arg("-")
+            .arg("--stats-every")
+            .arg("2s")
+            .args(req.targets)
+            .spawn()
+        else {
+            continue;
         };
-        println!("Done scanning, sleeping for {sleep:?}");
-        tokio::time::sleep(sleep).await;
+        let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
+            let _ = child.kill().await;
+            continue;
+        };
+        // let write_job = spawn(async move {
+        //     loop {
+        //         sleep(Duration::from_secs(2)).await;
+        //         let Ok(_) = stdin.write_all(b" \n\r").await else {
+        //             break;
+        //         };
+        //         println!("INTURRUPTED");
+        //     }
+        // });
+        let read_job = spawn(async move {
+            let mut buf = Vec::new();
+            let mut reader = Reader::from_reader(BufReader::new(stdout));
+            while let Ok(res) = reader.read_event_into_async(&mut buf).await {
+                match res {
+                    quick_xml::events::Event::Start(bytes_start) => {
+                        let QName(name) = bytes_start.name();
+                        let name = String::from_utf8_lossy(name);
+                        println!("Start Event: {name}");
+                    }
+                    quick_xml::events::Event::End(bytes_end) => {
+                        let QName(name) = bytes_end.name();
+                        let name = String::from_utf8_lossy(name);
+                        println!("End Event: {name}");
+                    }
+                    quick_xml::events::Event::Empty(bytes_start) => {
+                        let QName(name) = bytes_start.name();
+                        let attr: HashMap<_, _> = bytes_start
+                            .attributes()
+                            .flatten()
+                            .map(|Attribute { key, value }| {
+                                let QName(key) = key;
+                                let key = String::from_utf8_lossy(key).to_string();
+                                let value = String::from_utf8_lossy(value.as_ref()).to_string();
+                                (key, value)
+                            })
+                            .collect();
+                        let name = String::from_utf8_lossy(name);
+                        println!("Empty Event: {name:?} {attr:#?}");
+                    }
+                    quick_xml::events::Event::Text(bytes_text) => {
+                        let Ok(event) = bytes_text.decode().and_then(|i| Ok(i.to_string())) else {
+                            continue;
+                        };
+                        println!("Text Event: {} len: {}", event, bytes_text.len());
+                    }
+                    quick_xml::events::Event::Eof => break,
+                    _ => continue,
+                }
+            }
+        });
+        let (_, Ok(ret)) = join(read_job, child.wait()).await else {
+            continue;
+        };
+        println!("Process ended: {ret}");
     }
-}
-
-async fn parse_xml() -> IoResult<()> {
-    println!("Parsing XML");
-
-    let scan_results =
-        String::from_utf8(read("scan.xml").await?).map_err(|e| Error::new(ErrorKind::Other, e))?;
-    let results = from_str::<ScanResult>(scan_results.as_str())
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
-    *LAST_SCAN.write().await = results;
-    Ok(())
 }
 
 #[derive(ValueEnum, Clone)]

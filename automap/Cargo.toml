@@ -6,10 +6,11 @@ name = "automap"
 version = "0.1.0"
 
 [dependencies]
-axum = "0.7"
-chrono = "0.4"
+askama = "0.14.0"
+axum = { version = "0.8.4", features = ["macros"] }
 clap = { version = "4", features = ["derive"] }
-parse_duration = "2"
-quick-xml = {version = "0.31", features = ["serde", "serialize", "serde-types", "overlapped-lists"]}
-serde = {version = "1", features = ["derive"]}
+futures = "0.3.31"
+quick-xml = { version = "0.38.3", features = ["serde", "serialize", "serde-types", "overlapped-lists", "tokio", "async-tokio"] }
+serde = "1.0.225"
+serde_json = "1.0.145"
 tokio = {version = "1", features = ["full"]}
