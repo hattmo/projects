@@ -1,21 +1,19 @@
 <html>
-	<body>
-		<input id="target" type="textbox">
-		<button onclick="send()">send</button> 
-		<script>
-			async function send() {
-				const req = new Request("/scan", {
-					method: "POST",
-					headers: {
-						'Content-Type': 'application/json',
-  					},
-					body: JSON.stringify({
-						targets: [document.getElementById("target").value]
-					})
-				});
-				const res = await fetch(req);
-				console.log(res)
-			}
-		</script>
-	</body>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.7/dist/htmx.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx-ext-ws@2.0.2" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <form hx-ext="ws" ws-connect="/events" ws-send>
+      <input
+        name="targets"
+        type="text"
+      >
+      <input
+        type="submit"
+        value="Submit"
+      >
+    </form>
+    <div id="nodes"></div>
+  </body>
 </html>
