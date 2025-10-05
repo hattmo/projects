@@ -4,4 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bincode = "2.0.1"
 rustls = "0.23.19"
+proto = { path = "../proto/" }
+wasmer = "6.0.1"
+
