@@ -90,10 +90,9 @@ async fn ws_route(
     State((job_queue, event_queue)): State<(UnboundedSender<ScanRequest>, Sender<Node>)>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    let handler = move |ws| async {
+    ws.on_upgrade(move |ws| async {
         ws_handler(ws, job_queue, event_queue).await;
-    };
-    ws.on_upgrade(handler)
+    })
 }
 
 async fn ws_handler(
