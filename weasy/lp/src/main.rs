@@ -22,9 +22,7 @@ fn main() {
         let Ok(mut conn) = conn else {
             continue;
         };
-        if let ControlFlow::Break(_) = fun_name(ca_cert, server_cert, server_key, conn) {
-            return;
-        }
+       fun_name(ca_cert, server_cert, server_key, conn);
     }
 }
 
