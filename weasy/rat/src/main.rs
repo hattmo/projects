@@ -30,7 +30,6 @@ fn main() {
     let ca_cert = fs::read("./crypto/ca.crt").unwrap().leak();
     let client_cert = fs::read("./crypto/client.crt").unwrap().leak();
     let client_key = fs::read("./crypto/client.key").unwrap().leak();
-
     let (tx, rx) = start_callback(
         "lp",
         Duration::from_secs(5),

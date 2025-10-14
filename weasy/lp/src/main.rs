@@ -22,7 +22,7 @@ fn main() {
         let Ok(mut conn) = conn else {
             continue;
         };
-       fun_name(ca_cert, server_cert, server_key, conn);
+        fun_name(ca_cert, server_cert, server_key, conn);
     }
 }
 
