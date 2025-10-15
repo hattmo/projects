@@ -1,6 +1,6 @@
 #![feature(random)]
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     fs::{self, File},
     io::{self, Read, Write},
     net::{TcpStream, ToSocketAddrs},
@@ -8,7 +8,7 @@ use std::{
     process::{ChildStderr, ChildStdin, ChildStdout},
     random::random,
     sync::{
-        mpsc::{Receiver, Sender, TryRecvError},
+        mpsc::{Receiver, SendError, Sender, TryRecvError},
         Mutex,
     },
     thread,
@@ -16,7 +16,7 @@ use std::{
 };
 
 use proto::{
-    request::{self, Request},
+    request::{self, ReadAmount, Request},
     response::{self, Response},
 };
 use rustls::{
@@ -30,29 +30,36 @@ fn main() {
     let ca_cert = fs::read("./crypto/ca.crt").unwrap().leak();
     let client_cert = fs::read("./crypto/client.crt").unwrap().leak();
     let client_key = fs::read("./crypto/client.key").unwrap().leak();
-    let (tx, rx) = start_callback(
+
+    let Ok((tx, rx)) = start_callback(
         "lp",
         Duration::from_secs(5),
         "localhost:1337",
         ca_cert,
         client_cert,
         client_key,
-    )
-    .unwrap();
+    ) else {
+        return;
+    };
 
     let handles: Handles = Mutex::new(HashMap::new());
 
     while let Ok(Request { session, seq, req }) = rx.recv() {
-        match req {
+        if let Err(e) = match req {
             request::RequestType::Exec(exec) => {
                 println!("Got Exec");
-                do_exec(exec, session, seq, &handles, tx.clone());
+                do_exec(exec, session, seq, &handles, tx.clone())
             }
             request::RequestType::Read(read) => {
                 println!("Got Read");
-                do_read(read, session, seq, &handles, tx.clone());
+                do_read(read, session, seq, &handles, tx.clone())
             }
-            _ => println!("Unsupported type"),
+            _ => {
+                println!("Unsupported type");
+                continue;
+            }
+        } {
+            break;
         }
     }
 }
@@ -62,7 +69,7 @@ fn do_exec(
     seq: u64,
     handles: &Handles,
     tx: Sender<response::Response>,
-) {
+) -> Result<(), SendError<response::Response>> {
     let request::Exec {
         command,
         args,
@@ -102,7 +109,7 @@ fn do_exec(
         Ok(mut child) => {
             let mut handles = handles.lock().unwrap();
             if let Some(stdout) = child.stdout.take() {
-                let id: u64 = random();
+                let id: u64 = random(..);
                 handles.insert(id, stdout.into());
                 tx.send(Response {
                     session,
@@ -115,7 +122,7 @@ fn do_exec(
                 .unwrap();
             }
             if let Some(stdin) = child.stdin.take() {
-                let id: u64 = random();
+                let id: u64 = random(..);
                 handles.insert(id, stdin.into());
                 tx.send(Response {
                     session,
@@ -128,7 +135,7 @@ fn do_exec(
                 .unwrap();
             }
             if let Some(stderr) = child.stderr.take() {
-                let id: u64 = random();
+                let id: u64 = random(..);
                 handles.insert(id, stderr.into());
                 tx.send(Response {
                     session,
@@ -146,53 +153,56 @@ fn do_exec(
 }
 
 fn do_read(
-    read: request::Read,
+    request::Read { id, ammount }: request::Read,
     session: u64,
     seq: u64,
     handles: &Mutex<HashMap<u64, Handle>>,
     tx: Sender<response::Response>,
-) {
-    let request::Read { id, ammount } = read;
+) -> Result<(), SendError<response::Response>> {
     let mut handles = handles.lock().unwrap();
-    let Some(handle) = handles.get_mut(&id) else {
-        tx.send(response::Response {
+    let Entry::Occupied(mut entry) = handles.entry(id) else {
+        return tx.send(response::Response {
             session,
             seq,
             res: response::ResponseType::HandleNotFound(id),
-        })
-        .unwrap();
-        return;
+        });
     };
-    let data = match ammount {
+    let handle = entry.get_mut();
+    match read_data(handle, ammount) {
+        Ok(data) => tx.send(Response {
+            session,
+            seq,
+            res: response::ResponseType::Read(response::Read { data }),
+        }),
+        Err(error) => {
+            entry.remove();
+            tx.send(Response {
+                session,
+                seq,
+                res: response::ResponseType::Error(error),
+            })
+        }
+    }
+}
+fn read_data(handle: &mut Handle, ammount: ReadAmount) -> Result<Vec<u8>, String> {
+    match ammount {
         request::ReadAmount::End => {
             let mut buf = Vec::new();
-            handle.read_to_end(&mut buf);
-            buf
+            handle.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+            Ok(buf)
         }
         request::ReadAmount::Exact(len) => {
             let mut buf = vec![0; len];
-            if let Err(e) = handle.read_exact(&mut buf) {
-                tx.send(Response {
-                    session,
-                    seq,
-                    res: response::ResponseType::Error(e.to_string()),
-                });
-                return;
-            };
-            buf
+            handle.read_exact(&mut buf).map_err(|e| e.to_string())?;
+            Ok(buf)
         }
         request::ReadAmount::Some(len) => {
             let mut buf = vec![0; len];
-            let r = handle.read(&mut buf).unwrap();
+            let r = handle.read(&mut buf).map_err(|e| e.to_string()).unwrap();
             buf.resize(r, 0);
-            buf
+            Ok(buf)
         }
-    };
-    tx.send(Response {
-        session,
-        seq,
-        res: response::ResponseType::Read(response::Read { data }),
-    });
+    }
 }
 
 enum Handle {

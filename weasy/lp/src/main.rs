@@ -19,7 +19,7 @@ fn main() {
         .unwrap()
         .into_incoming()
     {
-        let Ok(mut conn) = conn else {
+        let Ok(conn) = conn else {
             continue;
         };
         fun_name(ca_cert, server_cert, server_key, conn);
@@ -43,7 +43,7 @@ fn fun_name(
             Ok(r) => r,
             Err(e) => {
                 println!("{e}");
-                return ControlFlow::Break(());
+                return;
             }
         };
     bincode::encode_into_std_write::<Vec<Request>, _, _>(
@@ -52,7 +52,6 @@ fn fun_name(
         bincode::config::standard(),
     )
     .unwrap();
-    ControlFlow::Continue(())
 }
 
 fn get_peer(ctx: &ServerConnection) -> Option<String> {
