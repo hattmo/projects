@@ -79,11 +79,13 @@ async fn send_keys(
     //let key_codes = key_codes.join(" ");
     let body = format!(include_str!("./envelope.txt"), vm_id);
     println!("{body}");
+    println!("{{{session}}}");
     let res = client
         .post(format!("https://{host}/sdk"))
         .header("Content-Type", "text/xml")
         .header("SOAPAction", "urn:vim25/6.5")
-        .header("Cookie", format!("vmware-api-session-id={session}"))
+        // .header("vmware-api-session-id", session)
+        .header("Cookie", format!("vmware_soap_session=\"{session}\""))
         .body(body)
         .send()
         .await?;
@@ -109,7 +111,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()?;
     let session = login(&client, &args.host, &args.username, &args.password).await?;
     let vms = get_vms(&client, &session, &args.host).await?;
-    let test_vm_id = vms.get("monitor").unwrap();
+    println!("{vms:#?}");
+    let test_vm_id = vms.get("resolve").unwrap();
     send_keys(&client, &session, &args.host, &test_vm_id, "echo foo\x1C").await?;
     Ok(())
 }

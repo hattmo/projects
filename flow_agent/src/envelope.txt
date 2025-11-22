@@ -2,28 +2,27 @@
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
                   xmlns:vim25="urn:vim25">
   <soapenv:Header>
-    <!-- Insert session authentication header here -->
   </soapenv:Header>
   <soapenv:Body>
-    <vim25:SendUsbScanCodes>
+    <vim25:PutUsbScanCodes>
       <_this type="VirtualMachine">{}</_this>
       <spec>
         <keyEvents>
-          <usbHidCode>0x0b</usbHidCode> <!-- 'h' key -->
+          <usbHidCode>4</usbHidCode> 
         </keyEvents>
         <keyEvents>
-          <usbHidCode>0x08</usbHidCode> <!-- 'e' key -->
+          <usbHidCode>5</usbHidCode>
         </keyEvents>
         <keyEvents>
-          <usbHidCode>0x0f</usbHidCode> <!-- 'l' key -->
+          <usbHidCode>6</usbHidCode>
         </keyEvents>
         <keyEvents>
-          <usbHidCode>0x0f</usbHidCode> <!-- 'l' key -->
+          <usbHidCode>7</usbHidCode>
         </keyEvents>
         <keyEvents>
-          <usbHidCode>0x12</usbHidCode> <!-- 'o' key -->
+          <usbHidCode>8</usbHidCode>
         </keyEvents>
       </spec>
-    </vim25:SendUsbScanCodes>
+    </vim25:PutUsbScanCodes>
   </soapenv:Body>
 </soapenv:Envelope>
