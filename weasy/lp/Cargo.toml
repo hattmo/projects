@@ -8,3 +8,5 @@ rustls = "0.23.19"
 bincode = "2.0.1"
 proto = { path = "../proto/" }
 x509-parser = "0.18.0"
+axum = { version = "0.8.6", features = ["ws"] }
+tokio = { version = "1.48.0", features = ["full"] }

@@ -6,11 +6,12 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use axum::{response::IntoResponse, routing::get};
 use proto::{request::Request, response::Response};
 use rustls::{
     pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
     server::WebPkiClientVerifier,
-    RootCertStore, ServerConfig, ServerConnection,
+    RootCertStore, ServerConfig, ServerConnection, Stream,
 };
 use x509_parser::prelude::*;
 
@@ -58,7 +59,7 @@ fn handle_conn(
         ctx.complete_io(&mut conn).unwrap();
     }
     let peer = get_peer(&ctx).ok_or("No Peer")?;
-    let mut stream = rustls::Stream::new(&mut ctx, &mut conn);
+    let mut stream = Stream::new(&mut ctx, &mut conn);
 
     let mut session_lock = sessions.lock().unwrap();
     let session = session_lock
@@ -93,9 +94,11 @@ fn get_peer(ctx: &ServerConnection) -> Option<String> {
         .iter_common_name()
         .next()
         .map(AttributeTypeAndValue::as_str)?
-        .ok()?;
-    Some(cn.into())
+        .ok()?
+        .to_owned();
+    Some(cn)
 }
+
 #[derive(Debug)]
 enum ConnectError {
     NoCerts,
