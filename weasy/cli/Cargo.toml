@@ -1,7 +1,7 @@
 [package]
-name = "ui"
+name = "cli"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-yew = { version = "0.21.0", features = ["csr"] }
+ratatui = "0.29.0"

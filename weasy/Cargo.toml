@@ -1,3 +1,3 @@
 [workspace]
-members = ["rat", "lp", "proto", "ui"]
+members = ["rat", "lp", "proto", "cli"]
 resolver = "2"
