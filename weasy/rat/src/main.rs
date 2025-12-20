@@ -150,6 +150,7 @@ fn do_exec(
         }
         Err(err) => todo!(),
     };
+    Ok(())
 }
 
 fn do_read(
