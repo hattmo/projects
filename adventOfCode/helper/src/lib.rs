@@ -1,8 +1,17 @@
 #![feature(duration_millis_float)]
 use anyhow::{anyhow, Result};
+use clap::Parser;
 use directories::UserDirs;
 use reqwest::blocking;
 use std::{fmt::Debug, fs, io::stdin, time::Instant};
+
+#[derive(clap::Parser)]
+struct Args {
+    #[arg(long)]
+    part1: bool,
+    #[arg(long)]
+    part2: bool,
+}
 
 pub fn get_input(year: &str, day: &str) -> Result<String> {
     let key = std::env::var("AOC_KEY").or(Err(anyhow!("Environment variable not set")))?;
@@ -39,17 +48,25 @@ where
     F: FnOnce(&str) -> T,
     V: FnOnce(&str) -> U,
 {
+    let mut args = Args::parse();
+    if !args.part1 && !args.part2 {
+        args.part1 = true;
+        args.part2 = true;
+    }
     match get_input(year, day) {
         Ok(input) => {
-            let now = Instant::now();
-            let res = part_1(&input);
-            let time = now.elapsed().as_millis_f64() / 1000.0;
-            println!("part 1: {res:?} ({time:.4} secs)");
-
-            let now = Instant::now();
-            let res = part_2(&input);
-            let time = now.elapsed().as_millis_f64() / 1000.0;
-            println!("part 2: {res:?} ({time:.4} secs)");
+            if args.part1 {
+                let now = Instant::now();
+                let res = part_1(&input);
+                let time = now.elapsed().as_millis_f64() / 1000.0;
+                println!("part 1: {res:?} ({time:.4} secs)");
+            }
+            if args.part2 {
+                let now = Instant::now();
+                let res = part_2(&input);
+                let time = now.elapsed().as_millis_f64() / 1000.0;
+                println!("part 2: {res:?} ({time:.4} secs)");
+            }
         }
         Err(err) => println!("Error getting input: {err}"),
     };
