@@ -1,52 +1,90 @@
 #![feature(never_type)]
-use std::{error::Error, os::linux::raw::stat, sync::Arc, time::Duration};
+use std::{error::Error, time::Duration};
 
 use ratatui::{
-    DefaultTerminal, Frame,
-    crossterm::event::{self, KeyCode},
+    DefaultTerminal,
+    crossterm::event::{self, Event as TermEvent},
 };
-use tokio::sync::{Mutex, mpsc::UnboundedReceiver};
+use tokio::{
+    sync::mpsc::{UnboundedSender, unbounded_channel},
+    task::spawn_blocking,
+};
 use zbus::{Connection, Proxy};
+
+struct AppState {
+    msg: String,
+}
+
+enum DbusEvent {
+    HostName(String),
+}
+
+enum AppEvent {
+    TermEvent(TermEvent),
+    DbusEvent(DbusEvent),
+}
 
 #[tokio::main]
 async fn main() {
-    let term = ratatui::init();
-    let state = Arc::new(Mutex::new(String::from("Loading...")));
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx, mut rx) = unbounded_channel();
+    spawn_blocking(move || {
+        let res: Result<(), Box<dyn Error>> = ratatui::run(|term| {
+            let mut state = AppState {
+                msg: "Loading".to_owned(),
+            };
+            render(term, &state)?;
+            while let Some(evt) = rx.blocking_recv() {
+                if handle_event(evt, &mut state) {
+                    break;
+                };
+                render(term, &state)?;
+            }
+            Ok(())
+        });
+        if let Err(e) = res {
+            println!("Error: {e}");
+        }
+    });
     {
-        let state = state.clone();
-        tokio::task::spawn_blocking(move || {
-            if let Err(e) = run(term, state, rx) {
-                println!("Error: {e}");
+        let tx = tx.clone();
+        spawn_blocking(move || {
+            while let Ok(evt) = event::read() {
+                if let Err(_) = tx.send(AppEvent::TermEvent(evt)) {
+                    break;
+                };
             }
         });
     }
-    if let Err(e) = connect_dbus(state).await {
-        println!("Error: {e}");
+    if let Err(e) = connect_dbus(tx).await {
+        println!("DBUS Error: {e}");
     };
-    ratatui::restore();
 }
 
-fn run(
-    mut term: DefaultTerminal,
-    state: Arc<Mutex<String>>,
-    mut rx: UnboundedReceiver<()>,
-) -> Result<(), Box<dyn Error>> {
-    while let Some(_) = rx.blocking_recv() {
-        let state = state.clone();
-        term.draw(|frame| render(frame, state))?;
+fn handle_event(evt: AppEvent, state: &mut AppState) -> bool {
+    match evt {
+        AppEvent::TermEvent(term_event) => match term_event {
+            TermEvent::Key(key_event) => match key_event.code {
+                event::KeyCode::Enter => return true,
+                _ => {}
+            },
+            _ => {}
+        },
+        AppEvent::DbusEvent(dbus_event) => match dbus_event {
+            DbusEvent::HostName(hn) => state.msg = hn,
+        },
     }
+    return false;
+}
+
+fn render(term: &mut DefaultTerminal, state: &AppState) -> Result<(), Box<dyn Error>> {
+    term.draw(|frame| {
+        frame.render_widget(state.msg.as_str(), frame.area());
+    })?;
     Ok(())
 }
 
-fn render(frame: &mut Frame, state: Arc<Mutex<String>>) {
-    let state = state.blocking_lock();
-    let data = state.as_str();
-    frame.render_widget(data, frame.area());
-}
-
-async fn connect_dbus(state: Arc<Mutex<String>>) -> Result<(), zbus::Error> {
-    tokio::time::sleep(Duration::from_secs(2)).await;
+async fn connect_dbus(event_stream: UnboundedSender<AppEvent>) -> Result<(), zbus::Error> {
+    tokio::time::sleep(Duration::from_secs(1)).await;
     let conn = Connection::system().await?;
     let p = Proxy::new(
         &conn,
@@ -56,7 +94,8 @@ async fn connect_dbus(state: Arc<Mutex<String>>) -> Result<(), zbus::Error> {
     )
     .await?;
     let hn: String = p.get_property("Hostname").await?;
-    let mut state = state.lock().await;
-    *state = hn;
+    event_stream
+        .send(AppEvent::DbusEvent(DbusEvent::HostName(hn)))
+        .map_err(|e| zbus::Error::Failure(e.to_string()))?;
     Ok(())
 }
