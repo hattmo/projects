@@ -1,13 +1,13 @@
-use std::{io::SeekFrom, net::SocketAddr, path::PathBuf, time::Duration};
-
 pub mod response {
     use bincode::{Decode, Encode};
+
     #[derive(Encode, Decode)]
     pub struct Response {
-        pub session: u64,
+        pub sess: u64,
         pub seq: u64,
         pub res: ResponseType,
     }
+
     #[derive(Encode, Decode)]
     pub enum ResponseType {
         NewHandle(NewHandle),
@@ -27,19 +27,14 @@ pub mod response {
         pub id: u64,
     }
 }
+
 pub mod request {
     use bincode::{Decode, Encode};
-    use std::time::Duration;
-
-    use std::net::SocketAddr;
-
-    use std::io::SeekFrom;
-
-    use std::path::PathBuf;
+    use std::{io::SeekFrom, net::SocketAddr, path::PathBuf, time::Duration};
 
     #[derive(Encode, Decode)]
     pub struct Request {
-        pub session: u64,
+        pub sess: u64,
         pub seq: u64,
         pub req: RequestType,
     }
@@ -48,13 +43,12 @@ pub mod request {
     pub enum RequestType {
         Exec(Exec),
         Open(Open),
+        Bind(Bind),
+        Connect(Connect),
         Close(Close),
         Read(Read),
         Write(Write),
         Seek(Seek),
-        Bind(Bind),
-        UnBind(UnBind),
-        Connect(Connect),
         Shutdown,
         Config(Config),
     }
@@ -136,31 +130,13 @@ pub mod request {
     }
 
     #[derive(Encode, Decode)]
-    pub struct UnBind {
-        pub id: u64,
-    }
-
-    #[derive(Encode, Decode)]
     pub struct Connect {
         pub addr: SocketAddr,
     }
 
     #[derive(Encode, Decode)]
-    pub struct Config {
-        pub sleep: Duration,
-    }
-
-    #[cfg(test)]
-    pub(crate) mod test {
-        use std::io::Read;
-
-        #[test]
-        pub fn playground() -> std::io::Result<()> {
-            let mut f = std::fs::File::open("/etc/shadow")?;
-            let mut out = String::new();
-            f.read_to_string(&mut out)?;
-            println!("{out}");
-            Ok(())
-        }
+    pub enum Config {
+        Get,
+        Sleep(Duration),
     }
 }

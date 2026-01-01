@@ -1,45 +1,163 @@
-#![feature(tcplistener_into_incoming)]
-
 use std::{
     collections::HashMap,
     fs,
-    sync::{Arc, Mutex},
+    future::pending,
+    path::PathBuf,
+    sync::{Arc, Mutex, MutexGuard},
 };
 
-use axum::{response::IntoResponse, routing::get};
-use proto::{request::Request, response::Response};
+use bincode::config::{self, Configuration};
+use proto::{
+    request::{Open, Request, RequestType},
+    response::Response,
+};
 use rustls::{
     pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
     server::WebPkiClientVerifier,
     RootCertStore, ServerConfig, ServerConnection, Stream,
 };
 use x509_parser::prelude::*;
+use zbus::{connection, interface};
 
-struct SessionQueues {
-    responses: Vec<Response>,
-    unhandled_requests: Vec<Request>,
-    handled_requests: Vec<Request>,
+struct Weasy {
+    store: AgentStore,
 }
 
-type SessionContext = Arc<Mutex<SessionQueues>>;
+#[interface(name = "com.hattmo.Weasy1")]
+impl Weasy {
+    fn request_open(&self, agent: &str, sess: u64, path: PathBuf) {
+        let agent_ctx = self.store.get_agent_context(agent);
+        let seq = agent_ctx.next_seq(sess);
+        let req = Request {
+            sess,
+            seq,
+            req: RequestType::Open(Open { path }),
+        };
+        agent_ctx.put_request(req);
+    }
+}
+
+#[derive(Default, Clone)]
+struct AgentStore(Arc<Mutex<HashMap<String, AgentContext>>>);
+
+impl AgentStore {
+    fn new() -> Self {
+        AgentStore::default()
+    }
+
+    fn get_agent_context(&self, agent: &str) -> AgentContext {
+        let mut lock = self.0.lock().unwrap();
+        let context = lock.entry(agent.to_owned()).or_default();
+        context.clone()
+    }
+}
+
+struct Transaction {
+    req: Request,
+    res: Vec<Response>,
+}
+
+impl From<Request> for Transaction {
+    fn from(value: Request) -> Self {
+        Transaction {
+            req: value,
+            res: Vec::new(),
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+struct AgentContext {
+    sessions: Arc<Mutex<HashMap<u64, u64>>>,
+    transactions: Arc<Mutex<Vec<Transaction>>>,
+}
+
+struct PendingRequests<'a> {
+    lock: MutexGuard<'a, Vec<Transaction>>,
+}
+
+impl<'a> PendingRequests<'a> {
+    fn iter(&'a self) -> impl Iterator<Item = &'a Request> {
+        let ret = self
+            .lock
+            .iter()
+            .filter(|i| i.res.is_empty())
+            .map(|i| &i.req);
+        ret
+    }
+}
+
+impl AgentContext {
+    fn put_request(&self, req: Request) {
+        let mut lock = self.transactions.lock().unwrap();
+        lock.push(req.into());
+    }
+
+    fn put_responses(&self, ress: impl IntoIterator<Item = Response>) {
+        let mut lock = self.transactions.lock().unwrap();
+        for new_res in ress {
+            if let Some(i) = lock
+                .iter_mut()
+                .find(|i| i.req.sess == new_res.sess && i.req.seq == new_res.seq)
+            {
+                i.res.push(new_res)
+            };
+        }
+    }
+
+    fn pending_requests(&self) -> PendingRequests<'_> {
+        PendingRequests {
+            lock: self.transactions.lock().unwrap(),
+        }
+    }
+
+    fn next_seq(&self, sess: u64) -> u64 {
+        let mut lock = self.sessions.lock().unwrap();
+        let seq = lock.entry(sess).or_default();
+        *seq += 1;
+        *seq
+    }
+}
 
 fn main() {
-    let ca_cert: &[u8] = fs::read("./crypto/ca.crt").unwrap().leak();
-    let server_cert: &[u8] = fs::read("./crypto/server.crt").unwrap().leak();
-    let server_key: &[u8] = fs::read("./crypto/server.key").unwrap().leak();
-    let sessions = Mutex::new(HashMap::new());
+    let ca_cert = fs::read("./crypto/ca.crt").unwrap();
+    let server_cert = fs::read("./crypto/server.crt").unwrap();
+    let server_key = fs::read("./crypto/server.key").unwrap();
+    let config = new_server_config(&ca_cert, &server_cert, &server_key).unwrap();
+    let store = AgentStore::new();
     std::thread::scope(|t| {
+        let dbus_store = store.clone();
+        t.spawn(|| {
+            let ret: Result<(), Box<str>> =
+                tokio::runtime::Runtime::new().unwrap().block_on(async {
+                    let _conn = connection::Builder::session()
+                        .err_str()?
+                        .name("com.hattmo.Weasy")
+                        .err_str()?
+                        .serve_at("/com/hattmo/Weasy", Weasy { store: dbus_store })
+                        .err_str()?
+                        .build()
+                        .await
+                        .err_str()?;
+                    pending::<()>().await;
+                    Ok(())
+                });
+            if let Err(e) = ret {
+                println!("Error: {e}");
+            }
+        });
         for conn in std::net::TcpListener::bind("0.0.0.0:1337")
             .unwrap()
-            .into_incoming()
+            .incoming()
         {
             let Ok(conn) = conn else {
                 println!("Failed to properly establish socket");
                 continue;
             };
-            let sessions = &sessions;
+            let store = store.clone();
+            let config = config.clone();
             t.spawn(move || {
-                if let Err(e) = handle_conn(ca_cert, server_cert, server_key, conn, sessions) {
+                if let Err(e) = handle_conn(config, conn, store) {
                     println!("{e}");
                 };
             });
@@ -47,43 +165,28 @@ fn main() {
     });
 }
 
+const BC_CONF: Configuration = config::standard();
+
 fn handle_conn(
-    ca_cert: &[u8],
-    server_cert: &[u8],
-    server_key: &[u8],
+    config: Arc<ServerConfig>,
     mut conn: std::net::TcpStream,
-    sessions: &Mutex<HashMap<String, SessionContext>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut ctx = setup_ctx(ca_cert, server_cert, server_key).unwrap();
+    store: AgentStore,
+) -> Result<(), Box<str>> {
+    let mut ctx = ServerConnection::new(config).err_str()?;
     while ctx.is_handshaking() {
-        ctx.complete_io(&mut conn).unwrap();
+        ctx.complete_io(&mut conn).err_str()?;
     }
-    let peer = get_peer(&ctx).ok_or("No Peer")?;
+    let peer = get_peer(&ctx).ok_or("Unknow peer in cert")?;
+    let agent_ctx = store.get_agent_context(&peer);
     let mut stream = Stream::new(&mut ctx, &mut conn);
 
-    let mut session_lock = sessions.lock().unwrap();
-    let session = session_lock
-        .entry(peer)
-        .or_insert(Arc::new(Mutex::new(SessionQueues {
-            responses: Vec::new(),
-            unhandled_requests: Vec::new(),
-            handled_requests: Vec::new(),
-        })))
-        .clone();
-    drop(session_lock);
+    let res: Vec<Response> = bincode::decode_from_std_read(&mut stream, BC_CONF).err_str()?;
+    agent_ctx.put_responses(res);
 
-    let mut session = session.lock().unwrap();
+    let requests = agent_ctx.pending_requests();
+    let requests: Box<[&Request]> = requests.iter().collect();
+    bincode::encode_into_std_write(&requests, &mut stream, BC_CONF).err_str()?;
 
-    let resp: Vec<Response> =
-        bincode::decode_from_std_read(&mut stream, bincode::config::standard())?;
-    session.responses.extend(resp);
-    let req = std::mem::take(&mut session.unhandled_requests);
-    bincode::encode_into_std_write::<&Vec<Request>, _, _>(
-        &req,
-        &mut stream,
-        bincode::config::standard(),
-    )?;
-    session.handled_requests.extend(req);
     Ok(())
 }
 
@@ -99,34 +202,39 @@ fn get_peer(ctx: &ServerConnection) -> Option<String> {
     Some(cn)
 }
 
-#[derive(Debug)]
-enum ConnectError {
-    NoCerts,
-    BadPem,
-    BadConfig,
-}
-
-fn setup_ctx(
+fn new_server_config(
     ca_cert: &[u8],
     server_cert: &[u8],
     server_key: &[u8],
-) -> Result<ServerConnection, ConnectError> {
+) -> Result<Arc<ServerConfig>, Box<str>> {
     let mut store = RootCertStore::empty();
     store
-        .add(CertificateDer::from_pem_slice(ca_cert).or(Err(ConnectError::BadPem))?)
-        .or(Err(ConnectError::NoCerts))?;
+        .add(CertificateDer::from_pem_slice(ca_cert).err_str()?)
+        .err_str()?;
     let verifier = WebPkiClientVerifier::builder(Arc::new(store))
         .build()
         .unwrap();
     let config = ServerConfig::builder()
         .with_client_cert_verifier(verifier)
         .with_single_cert(
-            vec![CertificateDer::from_pem_slice(server_cert).or(Err(ConnectError::BadPem))?],
-            PrivateKeyDer::from_pem_slice(server_key).or(Err(ConnectError::BadPem))?,
+            vec![CertificateDer::from_pem_slice(server_cert).err_str()?],
+            PrivateKeyDer::from_pem_slice(server_key).err_str()?,
         )
         .unwrap();
-    let ctx = ServerConnection::new(config.into()).or(Err(ConnectError::BadConfig))?;
-    Ok(ctx)
+    Ok(config.into())
+}
+
+trait ErrorString<T> {
+    fn err_str(self) -> Result<T, Box<str>>;
+}
+
+impl<T, E> ErrorString<T> for Result<T, E>
+where
+    E: ToString,
+{
+    fn err_str(self) -> Result<T, Box<str>> {
+        self.map_err(|e| e.to_string().into())
+    }
 }
 
 #[cfg(test)]

