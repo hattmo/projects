@@ -1,20 +1,23 @@
-use std::{
-    collections::HashMap,
-    fs,
-    future::pending,
-    path::PathBuf,
-    sync::{Arc, Mutex, MutexGuard},
+use bincode::{
+    config::{self, Configuration},
+    error::DecodeError,
 };
-
-use bincode::config::{self, Configuration};
 use proto::{
     request::{Open, Request, RequestType},
     response::Response,
 };
-use rustls::{
-    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
-    server::WebPkiClientVerifier,
-    RootCertStore, ServerConfig, ServerConnection, Stream,
+use std::{collections::HashMap, fs, future::pending, path::PathBuf, sync::Arc};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::{Mutex, MutexGuard},
+};
+use tokio_rustls::{
+    rustls::{
+        pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
+        server::WebPkiClientVerifier,
+        RootCertStore, ServerConfig, ServerConnection,
+    },
+    TlsAcceptor,
 };
 use x509_parser::prelude::*;
 use zbus::{connection, interface};
@@ -25,15 +28,18 @@ struct Weasy {
 
 #[interface(name = "com.hattmo.Weasy1")]
 impl Weasy {
-    fn request_open(&self, agent: &str, sess: u64, path: PathBuf) {
-        let agent_ctx = self.store.get_agent_context(agent);
-        let seq = agent_ctx.next_seq(sess);
+    async fn request_open(&self, agent: &str, sess: u64, path: PathBuf) {
+        let agent_ctx = self.store.get_agent_context(agent).await;
+        let seq = agent_ctx.next_seq(sess).await;
         let req = Request {
             sess,
             seq,
             req: RequestType::Open(Open { path }),
         };
-        agent_ctx.put_request(req);
+        agent_ctx.put_request(req).await;
+    }
+    async fn get_agents(&self) -> Vec<String> {
+        self.store.get_agent_names().await
     }
 }
 
@@ -45,10 +51,13 @@ impl AgentStore {
         AgentStore::default()
     }
 
-    fn get_agent_context(&self, agent: &str) -> AgentContext {
-        let mut lock = self.0.lock().unwrap();
+    async fn get_agent_context(&self, agent: &str) -> AgentContext {
+        let mut lock = self.0.lock().await;
         let context = lock.entry(agent.to_owned()).or_default();
         context.clone()
+    }
+    async fn get_agent_names(&self) -> Vec<String> {
+        self.0.lock().await.keys().cloned().collect()
     }
 }
 
@@ -88,13 +97,13 @@ impl<'a> PendingRequests<'a> {
 }
 
 impl AgentContext {
-    fn put_request(&self, req: Request) {
-        let mut lock = self.transactions.lock().unwrap();
+    async fn put_request(&self, req: Request) {
+        let mut lock = self.transactions.lock().await;
         lock.push(req.into());
     }
 
-    fn put_responses(&self, ress: impl IntoIterator<Item = Response>) {
-        let mut lock = self.transactions.lock().unwrap();
+    async fn put_responses(&self, ress: impl IntoIterator<Item = Response>) {
+        let mut lock = self.transactions.lock().await;
         for new_res in ress {
             if let Some(i) = lock
                 .iter_mut()
@@ -105,87 +114,101 @@ impl AgentContext {
         }
     }
 
-    fn pending_requests(&self) -> PendingRequests<'_> {
+    async fn pending_requests(&self) -> PendingRequests<'_> {
         PendingRequests {
-            lock: self.transactions.lock().unwrap(),
+            lock: self.transactions.lock().await,
         }
     }
 
-    fn next_seq(&self, sess: u64) -> u64 {
-        let mut lock = self.sessions.lock().unwrap();
+    async fn next_seq(&self, sess: u64) -> u64 {
+        let mut lock = self.sessions.lock().await;
         let seq = lock.entry(sess).or_default();
         *seq += 1;
         *seq
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let ca_cert = fs::read("./crypto/ca.crt").unwrap();
     let server_cert = fs::read("./crypto/server.crt").unwrap();
     let server_key = fs::read("./crypto/server.key").unwrap();
     let config = new_server_config(&ca_cert, &server_cert, &server_key).unwrap();
     let store = AgentStore::new();
-    std::thread::scope(|t| {
-        let dbus_store = store.clone();
-        t.spawn(|| {
-            let ret: Result<(), Box<str>> =
-                tokio::runtime::Runtime::new().unwrap().block_on(async {
-                    let _conn = connection::Builder::session()
-                        .err_str()?
-                        .name("com.hattmo.Weasy")
-                        .err_str()?
-                        .serve_at("/com/hattmo/Weasy", Weasy { store: dbus_store })
-                        .err_str()?
-                        .build()
-                        .await
-                        .err_str()?;
-                    pending::<()>().await;
-                    Ok(())
-                });
-            if let Err(e) = ret {
-                println!("Error: {e}");
-            }
-        });
-        for conn in std::net::TcpListener::bind("0.0.0.0:1337")
-            .unwrap()
-            .incoming()
+    let _dbus_task = {
+        let store = store.clone();
+        tokio::spawn(async {
+            let _conn = connection::Builder::session()
+                .err_str()?
+                .name("com.hattmo.Weasy")
+                .err_str()?
+                .serve_at("/com/hattmo/Weasy", Weasy { store })
+                .err_str()?
+                .build()
+                .await
+                .err_str()?;
+            pending::<()>().await;
+            Ok::<(), Box<str>>(())
+        })
+    };
+    let _server_task = tokio::spawn(async move {
+        while let Ok((conn, _)) = tokio::net::TcpListener::bind("0.0.0.0:1337")
+            .await
+            .err_str()?
+            .accept()
+            .await
         {
-            let Ok(conn) = conn else {
-                println!("Failed to properly establish socket");
-                continue;
-            };
             let store = store.clone();
             let config = config.clone();
-            t.spawn(move || {
-                if let Err(e) = handle_conn(config, conn, store) {
+            tokio::spawn(async {
+                if let Err(e) = handle_conn(config, conn, store).await {
                     println!("{e}");
                 };
             });
         }
+        Ok::<(), Box<str>>(())
     });
 }
 
 const BC_CONF: Configuration = config::standard();
 
-fn handle_conn(
+async fn handle_conn(
     config: Arc<ServerConfig>,
-    mut conn: std::net::TcpStream,
+    conn: tokio::net::TcpStream,
     store: AgentStore,
 ) -> Result<(), Box<str>> {
-    let mut ctx = ServerConnection::new(config).err_str()?;
-    while ctx.is_handshaking() {
-        ctx.complete_io(&mut conn).err_str()?;
-    }
-    let peer = get_peer(&ctx).ok_or("Unknow peer in cert")?;
-    let agent_ctx = store.get_agent_context(&peer);
-    let mut stream = Stream::new(&mut ctx, &mut conn);
+    let acceptor: TlsAcceptor = config.into();
+    let mut tls_conn = acceptor.accept(conn).await.err_str()?;
+    let (_, ctx) = tls_conn.get_ref();
+    let peer = get_peer(ctx).ok_or("No Peer")?;
+    // let mut ctx = ServerConnection::new(config).err_str()?;
+    // while ctx.is_handshaking() {
+    //     ctx.complete_io(&mut conn).err_str()?;
+    // }
+    // let peer = get_peer(&ctx).ok_or("Unknow peer in cert")?;
+    let agent_ctx = store.get_agent_context(&peer).await;
 
-    let res: Vec<Response> = bincode::decode_from_std_read(&mut stream, BC_CONF).err_str()?;
-    agent_ctx.put_responses(res);
+    let mut buf = vec![0; 32];
+    let mut read = 0;
+    let res = loop {
+        read += tls_conn.read(&mut buf[read..]).await.err_str()?;
 
-    let requests = agent_ctx.pending_requests();
+        let res: Result<(Vec<Response>, _), _> =
+            bincode::decode_from_slice(&mut buf[..read], BC_CONF);
+        match res {
+            Ok((data, _)) => break data,
+            Err(DecodeError::UnexpectedEnd { additional }) => {
+                buf.resize(read + additional, 0);
+            }
+            Err(_) => return Err("Failed to parse".into()),
+        };
+    };
+    agent_ctx.put_responses(res).await;
+
+    let requests = agent_ctx.pending_requests().await;
     let requests: Box<[&Request]> = requests.iter().collect();
-    bincode::encode_into_std_write(&requests, &mut stream, BC_CONF).err_str()?;
+    let out = bincode::encode_to_vec(&requests, BC_CONF).err_str()?;
+    tls_conn.write_all(&out).await.err_str()?;
 
     Ok(())
 }
