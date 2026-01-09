@@ -87,12 +87,10 @@ struct PendingRequests<'a> {
 
 impl<'a> PendingRequests<'a> {
     fn iter(&'a self) -> impl Iterator<Item = &'a Request> {
-        let ret = self
-            .lock
+        self.lock
             .iter()
             .filter(|i| i.res.is_empty())
-            .map(|i| &i.req);
-        ret
+            .map(|i| &i.req)
     }
 }
 
