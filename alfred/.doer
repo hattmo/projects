@@ -1,0 +1,4 @@
+- name: "foo"
+  command: "echo foo"
+- name: "bar"
+  command: "echo bar"
