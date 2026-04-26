@@ -1,20 +1,31 @@
+use std::{any::Any, collections::HashMap};
+
+type RenderFn = fn(props: HashMap<&'static str, Box<dyn Any>>, ctx: &mut Context) -> Box<dyn Node>;
+
 pub struct Context;
 
-pub struct Node;
-
-trait RootComponent {
-    fn render(&mut self, ctx: &mut Context) -> Node;
-}
-
-impl<T> RootComponent for T
-where
-    T: Component<()>,
-{
-    fn render(&mut self, ctx: &mut Context) -> Node {
-        self.render(ctx, ())
+impl Context {
+    pub fn use_state<T>(&mut self, val: T) -> (T) {
+        val
     }
 }
 
-trait Component<T> {
-    fn render(&mut self, ctx: &mut Context, props: T) -> Node;
+pub trait Node {}
+
+pub struct Component {
+    render_fn: RenderFn,
+    ctx: Context,
+}
+
+impl Component {
+    pub fn new(render_fn: RenderFn) -> Self {
+        Self {
+            render_fn,
+            ctx: Context,
+        }
+    }
+
+    pub fn render(&mut self) -> Box<dyn Node> {
+        (self.render_fn)(HashMap::new(), &mut self.ctx)
+    }
 }
