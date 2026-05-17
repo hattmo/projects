@@ -2,21 +2,70 @@
 
 extern crate core;
 
-use aes_gcm::Aes128Gcm;
+use core::convert::TryFrom;
+
+use arrayvec::ArrayVec;
+
+use aes_gcm::{AeadCore, AeadInPlace, Aes256Gcm, Nonce, Tag};
 
 use ed25519_dalek::{
-    ed25519::signature::SignerMut, Signature, SignatureError, SigningKey, VerifyingKey,
+    ed25519::signature::SignerMut, Signature, SignatureError, SigningKey, Verifier, VerifyingKey,
 };
 
-use x25519_dalek::PublicKey;
+use x25519_dalek::{EphemeralSecret, PublicKey};
 
 enum LinkFrame<'a> {
     Packet(DataPacket<'a>),
     Authentication(AuthenticationPacket<'a>),
 }
+enum LinkFrameType {
+    Packet,
+    Authentication,
+}
+
+impl TryFrom<u8> for LinkFrameType {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0 => LinkFrameType::Packet,
+            1 => LinkFrameType::Authentication,
+            _ => return Err("Invalid Packet Type"),
+        })
+    }
+}
+
+impl<'a> LinkFrame<'a> {
+    pub fn parse(data: &'a mut [u8], state: &LinkState) -> Result<Self, &'static str> {
+        let (&mut ty, data) = data.split_first_mut().ok_or("Error")?;
+        let ty = LinkFrameType::try_from(ty)?;
+        match (ty, state) {
+            (LinkFrameType::Packet, LinkState::Up(state)) => {
+                let (nonce, data) = data.split_at_mut_checked(12).ok_or("Error")?;
+                let nonce = Nonce::from_slice(nonce);
+                let (tag, data) = data.split_at_mut_checked(16).ok_or("Error")?;
+                let tag = Tag::from_slice(tag);
+                state.decrypt_in_place_detached(nonce, Default::default(), data, tag);
+
+                let (&mut src, data) = data.split_first_chunk_mut().ok_or("Error")?;
+                let src = u64::from_le_bytes(src);
+                let (&mut dst, data) = data.split_first_chunk_mut().ok_or("Error")?;
+                let dst = u64::from_le_bytes(dst);
+                let (&mut hops, data) = data.split_first_mut().ok_or("Error")?;
+                return Ok(LinkFrame::Packet(DataPacket {
+                    src,
+                    dst,
+                    hops,
+                    data,
+                }));
+            }
+            _ => {}
+        }
+        Ok(todo!())
+    }
+}
 
 pub struct DataPacket<'a> {
-    read: bool,
     src: u64,
     dst: u64,
     hops: u8,
@@ -26,7 +75,6 @@ pub struct DataPacket<'a> {
 impl<'a> DataPacket<'a> {
     fn new(buffer: &'a mut [u8]) -> Self {
         Self {
-            read: false,
             src: 0,
             dst: 0,
             hops: 0,
@@ -42,39 +90,12 @@ pub struct AuthenticationPacket<'a> {
     dh_sig: &'a Signature,
 }
 
-pub struct InterfaceHandle(usize);
+#[derive(PartialEq, Eq)]
+pub struct LinkHandle(usize);
 
-enum InterfaceState {
-    Authenticating(VerifyingKey, SigningKey),
-    Sharing(),
-    Up(Aes128Gcm),
-    Dead,
-}
-
-pub struct Interface<'a, MAX_PACKET> {
-    router: &'a mut Router<MAX_PACKET>,
-    state: &'a mut InterfaceState,
-    out_packet: &'a mut DataPacket<'a>,
-    in_packet: &'a mut DataPacket<'a>,
-}
-
-impl<'a> Interface<'a> {
-    pub fn push_data(&mut self, in_buf: &[u8]) {
-        todo!()
-    }
-    pub fn pull_data(&mut self, out_buf: &mut [u8]) {
-        match self.state {
-            InterfaceState::Authenticating(verify, sign) => {
-                let public = sign.verifying_key();
-                let res = sign.sign(public.as_bytes());
-                *self.state = InterfaceState::Dead;
-            }
-            InterfaceState::Sharing() => todo!(),
-            InterfaceState::Up(_) => todo!(),
-            InterfaceState::Dead => todo!(),
-        }
-        todo!()
-    }
+enum LinkState {
+    Authenticating(EphemeralSecret),
+    Up(Aes256Gcm),
 }
 
 struct Route {
@@ -84,17 +105,34 @@ struct Route {
 }
 
 impl Route {
-    fn new(to: u64, via: u8, hops: u8) -> Self {
+    fn new(to: u64, via: u16, hops: u8) -> Self {
         Self { to, via, hops }
     }
 }
 
-pub struct Router<'a, const MAX_PACKET: usize> {
-    cert: SigningKey,
+struct KeyStore {
+    key_pair: SigningKey,
     ca: VerifyingKey,
+    sig: Signature,
+}
+
+impl KeyStore {
+    fn new(key_pair: &[u8; 64], sig: &[u8; 64], ca: &[u8; 32]) -> Result<Self, SignatureError> {
+        let key_pair = SigningKey::from_keypair_bytes(key_pair)?;
+        let cert = key_pair.verifying_key();
+        let ca = VerifyingKey::from_bytes(ca)?;
+        let sig = Signature::from_bytes(sig);
+        ca.verify(cert.as_bytes(), &sig)?;
+
+        Ok(Self { key_pair, ca, sig })
+    }
+}
+
+pub struct Router<'a, const MAX_PACKET: usize> {
     id: u64,
+    keystore: KeyStore,
     route_table: [Option<Route>; 128],
-    link_state: [Option<InterfaceState>; 32],
+    links: [Option<(LinkHandle, LinkState)>; 32],
     packet_buffers: &'a mut [[u8; MAX_PACKET]],
 }
 
@@ -108,45 +146,47 @@ impl From<SignatureError> for RouterError {
     }
 }
 
-struct CreateLinkError;
+pub struct CreateLinkError;
 
-impl<'a, const MAX_PACKET: usize> Router<'a, MAX_PACKET> {
+impl<'a, 'b, const MAX_PACKET: usize> Router<'a, MAX_PACKET> {
     pub fn new(
         id: u64,
-        key: &[u8; 64],
-        sig: &[u8; 64],
-        ca: &[u8; 32],
+        key_pair: &'b [u8; 64],
+        sig: &'b [u8; 64],
+        ca: &'b [u8; 32],
         buffers: &'a mut [u8],
     ) -> Result<Self, RouterError> {
-        let cert = SigningKey::from_keypair_bytes(key)?;
-        let ca = VerifyingKey::from_bytes(ca)?;
-        let sig = Signature::from_bytes(sig);
+        let keystore = KeyStore::new(key_pair, sig, ca)?;
         let (_, packet_buffers, _) = unsafe { buffers.align_to_mut::<[u8; MAX_PACKET]>() };
         Result::Ok(Self {
             id,
-            cert,
-            ca,
+            keystore,
             packet_buffers,
-            link_state: [const { Option::None }; 32],
+            links: [const { Option::None }; 32],
             route_table: [const { Option::None }; 128],
         })
     }
 
-    pub fn process(&mut self) {
+    pub fn process(&mut self, from_link: LinkHandle, data: &mut [u8]) {
+        let Some((_, state)) = self
+            .links
+            .iter_mut()
+            .flatten()
+            .find(|(h, _)| h == &from_link)
+        else {
+            return;
+        };
+        let Ok(data) = LinkFrame::parse(data, state) else {
+            return;
+        };
+    }
+
+    pub fn create_link_client(&mut self) -> Result<LinkHandle, CreateLinkError> {
+        let secret: EphemeralSecret = EphemeralSecret::random_from_rng(csprng);
         todo!()
     }
 
-    pub fn create_interface(
-        &mut self,
-        buffer: &'a mut [u8],
-    ) -> Result<InterfaceHandle, CreateLinkError> {
-        todo!()
-    }
-
-    pub fn destroy_interface(link: InterfaceHandle) {
-        todo!()
-    }
-    pub fn get_link(&'a mut self, &InterfaceHandle(handle): &InterfaceHandle) -> Option<Interface> {
+    pub fn destroy_interface(link: LinkHandle) {
         todo!()
     }
 }
