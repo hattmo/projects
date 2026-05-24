@@ -4,6 +4,7 @@ metadata:
   name: longhorn
   namespace: argocd
 spec:
+  project: default
   syncPolicy:
     automated:
       enabled: true
@@ -11,11 +12,10 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-  project: default
   sources:
     - chart: longhorn
       repoURL: https://charts.longhorn.io/
-      targetRevision: v1.11.2 # Replace with the Longhorn version you'd like to install or upgrade to
+      targetRevision: v1.11.2
       helm:
         values: |
           preUpgradeChecker:
