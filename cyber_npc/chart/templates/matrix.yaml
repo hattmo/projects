@@ -1,0 +1,274 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: matrix
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: matrix-secret-manager
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: matrix-binding
+subjects:
+- kind: ServiceAccount
+  name: matrix
+roleRef:
+  kind: Role
+  name: matrix-secret-manager
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: matrix-well-known
+data:
+  server: '{"m.server":"matrix.{{ .Release.Namespace }}.svc.cluster.local:443"}'
+  client: '{"m.homeserver":{"base_url":"https://matrix.{{ .Release.Namespace }}.svc.cluster.local"}}'
+  nginx.conf: |
+    server {
+        listen 8080;
+        return 301 https://$host$request_uri;
+    }
+    
+    server {
+        listen 8443 ssl;
+        ssl_certificate /etc/nginx/ssl/tls.crt;
+        ssl_certificate_key /etc/nginx/ssl/tls.key;
+        
+        location /.well-known/matrix/server {
+            default_type application/json;
+            alias /usr/share/nginx/html/.well-known/matrix/server;
+        }
+        
+        location /.well-known/matrix/client {
+            default_type application/json;
+            alias /usr/share/nginx/html/.well-known/matrix/client;
+        }
+        
+        location / {
+            proxy_pass http://127.0.0.1:8008;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: matrix
+  labels:
+    app: matrix
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: matrix
+  template:
+    metadata:
+      labels:
+        app: matrix
+    spec:
+      serviceAccountName: matrix
+      initContainers:
+      - name: setup-synapse
+        image: matrixdotorg/synapse:latest
+        volumeMounts:
+        - name: matrix-data
+          mountPath: /data
+        env:
+        - name: "SYNAPSE_SERVER_NAME"
+          value: "matrix.{{ .Release.Namespace }}.svc.cluster.local"
+        - name: "SYNAPSE_REPORT_STATS"
+          value: "no"
+        args:
+        - "generate"
+      - name: create-shared-secret
+        image: bitnami/kubectl:latest
+        volumeMounts:
+        - name: matrix-data
+          mountPath: /data
+        command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          if [ ! -f /data/homeserver.yaml ]; then
+            echo "ERROR: homeserver.yaml not found, synapse init failed"
+            exit 1
+          fi
+          echo "Extracting shared_secret from config..."
+          SHARED_SECRET=$(grep -E "^registration_shared_secret:" /data/homeserver.yaml | awk '{print $2}' | tr -d '"')
+          if [ -n "$SHARED_SECRET" ]; then
+            echo "Creating/updating matrix-shared-secret..."
+            kubectl create secret generic matrix-shared-secret \
+              --from-literal=shared_secret="$SHARED_SECRET" \
+              --dry-run=client -o yaml | kubectl apply -f -
+            echo "Secret created/updated successfully"
+          else
+            echo "ERROR: Could not find registration_shared_secret in config"
+            exit 1
+          fi
+      - name: init-ca
+        image: bitnami/kubectl:latest
+        volumeMounts:
+        - name: tls
+          mountPath: /etc/nginx/ssl
+        command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          echo "Checking for existing CA in matrix-ca secret..."
+          if kubectl get secret matrix-ca -n {{ .Release.Namespace }} > /dev/null 2>&1; then
+            echo "CA exists, extracting from secret..."
+            kubectl get secret matrix-ca -n {{ .Release.Namespace }} -o jsonpath="{.data.ca\.crt}" | base64 -d > /etc/nginx/ssl/ca.crt
+            kubectl get secret matrix-ca -n {{ .Release.Namespace }} -o jsonpath="{.data.ca\.key}" | base64 -d > /etc/nginx/ssl/ca.key
+            echo "CA loaded from secret"
+          else
+            echo "No CA found, generating new CA..."
+            # Generate CA private key
+            openssl genrsa -out /etc/nginx/ssl/ca.key 2048
+            # Generate CA certificate
+            openssl req -x509 -new -nodes -key /etc/nginx/ssl/ca.key \
+              -sha256 -days 3650 \
+              -out /etc/nginx/ssl/ca.crt \
+              -subj "/CN=npc.hattmo.com"
+            echo "Creating matrix-ca secret..."
+            kubectl create secret generic matrix-ca \
+              --from-file=ca.crt=/etc/nginx/ssl/ca.crt \
+              --from-file=ca.key=/etc/nginx/ssl/ca.key \
+              --namespace={{ .Release.Namespace }}
+            echo "CA generated and secret created"
+          fi
+      - name: generate-server-tls
+        image: alpine/openssl:latest
+        volumeMounts:
+        - name: tls
+          mountPath: /etc/nginx/ssl
+        command:
+        - "/bin/sh"
+        - "-c"
+        - |
+          CN="matrix.{{ .Release.Namespace }}.svc.cluster.local"
+          echo "Generating server certificate for $CN signed by CA..."
+          # Generate server private key
+          openssl genrsa -out /etc/nginx/ssl/tls.key 2048
+          # Generate CSR
+          openssl req -new -key /etc/nginx/ssl/tls.key \
+            -out /etc/nginx/ssl/server.csr \
+            -subj "/CN=$CN"
+          # Sign server cert with CA (SANs via command line)
+          openssl x509 -req -in /etc/nginx/ssl/server.csr \
+            -CA /etc/nginx/ssl/ca.crt \
+            -CAkey /etc/nginx/ssl/ca.key \
+            -CAcreateserial \
+            -out /etc/nginx/ssl/tls.crt \
+            -days 365 \
+            -extfile <(printf "subjectAltName=DNS:$CN,DNS:matrix,DNS:matrix.{{ .Release.Namespace }}.svc.cluster.local")
+          echo "Server certificate generated and signed by CA"
+          rm /etc/nginx/ssl/server.csr
+          ls -la /etc/nginx/ssl/
+      containers:
+      - name: synapse
+        image: matrixdotorg/synapse:latest
+        ports:
+        - containerPort: 8008
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: matrix-data
+          mountPath: /data
+      - name: well-known
+        image: nginx:alpine
+        ports:
+        - containerPort: 8443
+        volumeMounts:
+        - name: well-known
+          mountPath: /usr/share/nginx/html/.well-known/matrix
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+        - name: tls
+          mountPath: /etc/nginx/ssl
+          readOnly: true
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "25m"
+          limits:
+            memory: "64Mi"
+            cpu: "50m"
+        livenessProbe:
+          httpGet:
+            path: /.well-known/matrix/server
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /.well-known/matrix/server
+            port: 8443
+            scheme: HTTPS
+          initialDelaySeconds: 3
+          periodSeconds: 5
+      volumes:
+      - name: matrix-data
+        persistentVolumeClaim:
+          claimName: matrix-pvc
+      - name: well-known
+        configMap:
+          name: matrix-well-known
+          items:
+          - key: server
+            path: server
+          - key: client
+            path: client
+      - name: nginx-config
+        configMap:
+          name: matrix-well-known
+          items:
+          - key: nginx.conf
+            path: default.conf
+      - name: tls
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: matrix
+spec:
+  type: ClusterIP
+  selector:
+    app: matrix
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+  - port: 443
+    targetPort: 8443
+    name: https
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: matrix-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

@@ -1,0 +1,217 @@
+name: Build and Push Images
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - 'controller/**'
+      - 'openclaw/**'
+      - 'vmware_gateway/**'
+      - 'chart/values.yaml'
+      - '.github/workflows/build-images.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'controller/**'
+      - 'openclaw/**'
+      - 'vmware_gateway/**'
+      - '.github/workflows/build-images.yml'
+      - 'chart/values.yaml'
+env:
+  REGISTRY: docker.io
+
+jobs:
+  # Read versions from Helm values.yaml
+  get-versions:
+    runs-on: ubuntu-latest
+    outputs:
+      controller-version: ${{ steps.read-versions.outputs.controller-version }}
+      openclaw-version: ${{ steps.read-versions.outputs.openclaw-version }}
+      vmware-gateway-version: ${{ steps.read-versions.outputs.vmware-gateway-version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read versions from chart/values.yaml
+        id: read-versions
+        run: |
+          CONTROLLER_VERSION=$(grep -A2 "^  controller:" chart/values.yaml | grep "tag:" | head -1 | awk '{print $2}' | tr -d '"')
+          OPENCLAW_VERSION=$(grep -A2 "^  openclaw:" chart/values.yaml | grep "tag:" | head -1 | awk '{print $2}' | tr -d '"')
+          VMWARE_GATEWAY_VERSION=$(grep -A2 "^  vmwareGateway:" chart/values.yaml | grep "tag:" | head -1 | awk '{print $2}' | tr -d '"')
+          
+          echo "controller-version=$CONTROLLER_VERSION" >> $GITHUB_OUTPUT
+          echo "openclaw-version=$OPENCLAW_VERSION" >> $GITHUB_OUTPUT
+          echo "vmware-gateway-version=$VMWARE_GATEWAY_VERSION" >> $GITHUB_OUTPUT
+          
+          echo "Versions read from chart/values.yaml:"
+          echo "  controller: $CONTROLLER_VERSION"
+          echo "  openclaw: $OPENCLAW_VERSION"
+          echo "  vmware-gateway: $VMWARE_GATEWAY_VERSION"
+
+  # Controller Build
+  build-controller:
+    runs-on: ubuntu-latest
+    needs: get-versions
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if version tag already exists
+        if: github.event_name != 'pull_request'
+        id: check-tag
+        run: |
+          VERSION=${{ needs.get-versions.outputs.controller-version }}
+          if [ "$VERSION" != "latest" ]; then
+            if docker manifest inspect ${{ env.REGISTRY }}/hattmo/controller:$VERSION > /dev/null 2>&1; then
+              echo "WARNING: Tag $VERSION already exists. Skipping push to avoid overwrite."
+              echo "To rebuild, delete the tag from Docker Hub or bump version in chart/values.yaml"
+              echo "skip-push=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+          echo "skip-push=false" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/hattmo/controller
+          tags: |
+            type=raw,value=${{ needs.get-versions.outputs.controller-version }}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./controller
+          push: ${{ github.event_name != 'pull_request' && steps.check-tag.outputs.skip-push != 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # OpenClaw Build
+  build-openclaw:
+    runs-on: ubuntu-latest
+    needs: get-versions
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if version tag already exists
+        if: github.event_name != 'pull_request'
+        id: check-tag
+        run: |
+          VERSION=${{ needs.get-versions.outputs.openclaw-version }}
+          if [ "$VERSION" != "latest" ]; then
+            if docker manifest inspect ${{ env.REGISTRY }}/hattmo/openclaw:$VERSION > /dev/null 2>&1; then
+              echo "WARNING: Tag $VERSION already exists. Skipping push to avoid overwrite."
+              echo "To rebuild, delete the tag from Docker Hub or bump version in chart/values.yaml"
+              echo "skip-push=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+          echo "skip-push=false" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/hattmo/openclaw
+          tags: |
+            type=raw,value=${{ needs.get-versions.outputs.openclaw-version }}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./openclaw
+          push: ${{ github.event_name != 'pull_request' && steps.check-tag.outputs.skip-push != 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # VMware Gateway Build
+  build-vmware-gateway:
+    runs-on: ubuntu-latest
+    needs: get-versions
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Check if version tag already exists
+        if: github.event_name != 'pull_request'
+        id: check-tag
+        run: |
+          VERSION=${{ needs.get-versions.outputs.vmware-gateway-version }}
+          if [ "$VERSION" != "latest" ]; then
+            if docker manifest inspect ${{ env.REGISTRY }}/hattmo/vmware-gateway:$VERSION > /dev/null 2>&1; then
+              echo "WARNING: Tag $VERSION already exists. Skipping push to avoid overwrite."
+              echo "To rebuild, delete the tag from Docker Hub or bump version in chart/values.yaml"
+              echo "skip-push=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+          echo "skip-push=false" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/hattmo/vmware-gateway
+          tags: |
+            type=raw,value=${{ needs.get-versions.outputs.vmware-gateway-version }}
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./vmware_gateway
+          push: ${{ github.event_name != 'pull_request' && steps.check-tag.outputs.skip-push != 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
