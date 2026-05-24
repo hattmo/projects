@@ -1,11 +1,21 @@
-apiVersion: helm.k0sproject.io/v1beta1
-kind: Chart
+apiVersion: argoproj.io/v1alpha1
+kind: Application
 metadata:
   name: longhorn
-  namespace: kube-system
+  namespace: argocd
 spec:
-  chartName: longhorn/longhorn
-  version: "1.11.2"
-  namespace: longhorn-system
-  repository:
-    url: https://charts.longhorn.io
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+  project: default
+  sources:
+    - chart: longhorn
+      repoURL: https://charts.longhorn.io/
+      targetRevision: v1.11.2 # Replace with the Longhorn version you'd like to install or upgrade to
+      helm:
+        values: |
+          preUpgradeChecker:
+            jobEnabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: longhorn-system

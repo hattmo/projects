@@ -4,7 +4,7 @@ metadata:
   name: cluster-infrastructure
   namespace: argocd
 spec:
-  project: cluster-infrastructure
+  project: default
   source:
     repoURL: https://github.com/hattmo/projects.git
     targetRevision: HEAD
