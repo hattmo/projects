@@ -4,20 +4,21 @@ metadata:
   name: metallb
   namespace: argocd
 spec:
+  project: default
   syncPolicy:
     automated:
       enabled: true
       prune: true
       selfHeal: true
-  project: default
   sources:
     - chart: metallb
       repoURL: https://metallb.github.io/metallb
       targetRevision: v0.16.0
       helm:
         values: |
-          prometheus:
-            serviceMonitor:
-              enabled: false
+          frr-k8s:
+            prometheus:
+              serviceMonitor:
+                enabled: false
   destination:
     server: https://kubernetes.default.svc
