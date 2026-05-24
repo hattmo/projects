@@ -63,11 +63,9 @@ impl NlContext {
 pub unsafe fn make_vx_lan() {
     let sock = raw::nl_socket_alloc();
     raw::nl_connect(sock, NETLINK_ROUTE);
-
     let mut cache = ptr::null_mut();
     raw::rtnl_link_alloc_cache(sock, AF_UNSPEC, ptr::from_mut(&mut cache));
     let link = raw::rtnl_link_vxlan_alloc();
-
     let mut local = ptr::null_mut();
     raw::nl_addr_parse(
         c"172.168.212.122".as_ptr(),
@@ -75,7 +73,6 @@ pub unsafe fn make_vx_lan() {
         ptr::from_mut(&mut local),
     );
     raw::rtnl_link_vxlan_set_local(link, local);
-
     let mut remote = ptr::null_mut();
     raw::nl_addr_parse(
         c"172.168.212.125".as_ptr(),

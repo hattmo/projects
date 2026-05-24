@@ -1,0 +1,11 @@
+apiVersion: helm.k0sproject.io/v1beta1
+kind: Chart
+metadata:
+  name: longhorn
+  namespace: kube-system
+spec:
+  chartName: longhorn/longhorn
+  version: "1.11.2"
+  namespace: longhorn-system
+  repository:
+    url: https://charts.longhorn.io
