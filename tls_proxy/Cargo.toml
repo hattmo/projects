@@ -8,4 +8,4 @@ rcgen = "0.13.1"
 ring = { version = "0.17.13", features = ["std"] }
 rustls = { version = "0.23.19", features = ["ring"] }
 time = "0.3.47"
-tokio = { version = "1.41.1", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }
