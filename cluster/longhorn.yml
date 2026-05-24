@@ -5,6 +5,10 @@ metadata:
   namespace: argocd
 spec:
   syncPolicy:
+    automated:
+      enabled: true
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
   project: default
