@@ -1,10 +1,11 @@
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import fs from "fs";
 import util from "util";
 import uuid from "uuid/v4";
 
 const fsp = fs.promises;
-const execp = util.promisify(exec);
+const execFilep = util.promisify(execFile);
+const runKeytool = (args: string[]) => execFilep("keytool", args);
 
 const keygen = {
   checkDirs: async (): Promise<void> => {
@@ -56,45 +57,56 @@ const keygen = {
     return out.slice(0, out.length - 2);
   },
 
-  genkeypair: (keystore, opt, uniquepath) => execp(`keytool -genkeypair \
-        -alias ${keystore.alias} \
-        -keyalg RSA \
-        -keysize 2048 \
-        -dname "${keygen.buildOptDName(opt.dname)}" \
-        -validity 365 \
-        -keypass ${keystore.password} \
-        -storepass ${keystore.password} \
-        -keystore temp/${uniquepath}/${keystore.id}.jks`),
-  certreq: (keystore, uniquepath) => execp(`keytool -certreq \
-        -alias ${keystore.alias} \
-        -file temp/${uniquepath}/temp.csr \
-        -keypass ${keystore.password} \
-        -storepass  ${keystore.password}\
-        -keystore temp/${uniquepath}/${keystore.id}.jks`),
+  genkeypair: (keystore, opt, uniquepath) => runKeytool([
+    "-genkeypair",
+    "-alias", `${keystore.alias}`,
+    "-keyalg", "RSA",
+    "-keysize", "2048",
+    "-dname", `${keygen.buildOptDName(opt.dname)}`,
+    "-validity", "365",
+    "-keypass", `${keystore.password}`,
+    "-storepass", `${keystore.password}`,
+    "-keystore", `temp/${uniquepath}/${keystore.id}.jks`,
+  ]),
+  certreq: (keystore, uniquepath) => runKeytool([
+    "-certreq",
+    "-alias", `${keystore.alias}`,
+    "-file", `temp/${uniquepath}/temp.csr`,
+    "-keypass", `${keystore.password}`,
+    "-storepass", `${keystore.password}`,
+    "-keystore", `temp/${uniquepath}/${keystore.id}.jks`,
+  ]),
 
-  gencert: (keystore, uniquepath) => execp(`keytool -gencert\
-        -alias ${keystore.alias}\
-        -infile temp/${uniquepath}/temp.csr\
-        -outfile temp/${uniquepath}/temp.crt\
-        -keypass ${keystore.password}\
-        -storepass ${keystore.password}\
-        -keystore keystores/${keystore.id}.jks\
-        -rfc`),
+  gencert: (keystore, uniquepath) => runKeytool([
+    "-gencert",
+    "-alias", `${keystore.alias}`,
+    "-infile", `temp/${uniquepath}/temp.csr`,
+    "-outfile", `temp/${uniquepath}/temp.crt`,
+    "-keypass", `${keystore.password}`,
+    "-storepass", `${keystore.password}`,
+    "-keystore", `keystores/${keystore.id}.jks`,
+    "-rfc",
+  ]),
 
-  exportcert: (keystore, uniquepath, file) => execp(`keytool -exportcert\
-        -alias ${keystore.alias}\
-        -file temp/${uniquepath}/${file}\
-        -storepass ${keystore.password}\
-        -keystore keystores/${keystore.id}.jks\
-        -rfc`),
+  exportcert: (keystore, uniquepath, file) => runKeytool([
+    "-exportcert",
+    "-alias", `${keystore.alias}`,
+    "-file", `temp/${uniquepath}/${file}`,
+    "-storepass", `${keystore.password}`,
+    "-keystore", `keystores/${keystore.id}.jks`,
+    "-rfc",
+  ]),
 
-  importcert: (keystore, uniquepath, file) => execp(`keytool -importcert\
-            -noprompt -trustcacerts\
-            -alias ${keystore.alias}\
-            -file temp/${uniquepath}/${file}\
-            -keypass ${keystore.password}\
-            -storepass ${keystore.password}\
-            -keystore temp/${uniquepath}/${keystore.id}.jks`),
+  importcert: (keystore, uniquepath, file) => runKeytool([
+    "-importcert",
+    "-noprompt",
+    "-trustcacerts",
+    "-alias", `${keystore.alias}`,
+    "-file", `temp/${uniquepath}/${file}`,
+    "-keypass", `${keystore.password}`,
+    "-storepass", `${keystore.password}`,
+    "-keystore", `temp/${uniquepath}/${keystore.id}.jks`,
+  ]),
 };
 
 export default keygen;
