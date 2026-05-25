@@ -1,0 +1,64 @@
+use std::{
+    io::{self, Write},
+    process::Command,
+};
+
+fn main() -> io::Result<()> {
+    let command: Vec<String> = std::env::args().collect();
+    let command: Vec<_> = command.iter().map(|i| i.as_str()).collect();
+    let [_, command @ ..] = command.as_slice() else {
+        return Err(io::Error::other("Invalid Arguments"));
+    };
+    if command.is_empty() {
+        println!("no command to run");
+        return Ok(())
+    }
+
+    let hosts = [
+        "node_0.hattmo.com",
+        "node_1.hattmo.com",
+        "node_2.hattmo.com",
+        "node_3.hattmo.com",
+    ];
+
+    let compiled: String = std::thread::scope(|t| {
+        let mut results = Vec::new();
+        for host in hosts {
+            results.push((host,t.spawn::<_, Result<_, String>>(|| {
+                let mut out = Vec::new();
+                run_command(command, "root", host, &mut out).map_err(|e| e.to_string())?;
+                Ok(out)
+            })));
+        }
+        results
+            .into_iter()
+            .map(|(host, result)| {
+                let (Ok(v) | Err(v)) = result.join()
+                    .or(Err("Failed to join thread".to_owned()))
+                    .flatten()
+                    .map(|res| String::from_utf8_lossy(&res).into_owned());
+                format!("---{host}---\n{v}\n")
+            })
+            .collect()
+    });
+    println!("{compiled}");
+    Ok(())
+}
+
+fn run_command(
+    command: &[&str],
+    user: &str,
+    host: &str,
+    mut out: impl Write,
+) -> std::io::Result<()> {
+    let (mut pipe_read, pipe_write) = std::io::pipe()?;
+    let mut child = Command::new("ssh")
+        .arg(format!("{user}@{host}"))
+        .args(command)
+        .stdout(pipe_write.try_clone()?)
+        .stderr(pipe_write)
+        .spawn()?;
+    io::copy(&mut pipe_read, &mut out)?;
+    child.wait()?;
+    Ok(())
+}
