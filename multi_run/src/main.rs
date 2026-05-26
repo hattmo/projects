@@ -1,3 +1,4 @@
+use libc::openpty;
 use std::{
     io::{self, Write},
     process::Command,
@@ -11,7 +12,7 @@ fn main() -> io::Result<()> {
     };
     if command.is_empty() {
         println!("no command to run");
-        return Ok(())
+        return Ok(());
     }
 
     let hosts = [
@@ -24,16 +25,20 @@ fn main() -> io::Result<()> {
     let compiled: String = std::thread::scope(|t| {
         let mut results = Vec::new();
         for host in hosts {
-            results.push((host,t.spawn::<_, Result<_, String>>(|| {
-                let mut out = Vec::new();
-                run_command(command, "root", host, &mut out).map_err(|e| e.to_string())?;
-                Ok(out)
-            })));
+            results.push((
+                host,
+                t.spawn::<_, Result<_, String>>(|| {
+                    let mut out = Vec::new();
+                    run_command(command, "root", host, &mut out).map_err(|e| e.to_string())?;
+                    Ok(out)
+                }),
+            ));
         }
         results
             .into_iter()
             .map(|(host, result)| {
-                let (Ok(v) | Err(v)) = result.join()
+                let (Ok(v) | Err(v)) = result
+                    .join()
                     .or(Err("Failed to join thread".to_owned()))
                     .flatten()
                     .map(|res| String::from_utf8_lossy(&res).into_owned());
@@ -51,6 +56,20 @@ fn run_command(
     host: &str,
     mut out: impl Write,
 ) -> std::io::Result<()> {
+    let mut amaster = 0;
+    let amaster_ptr: *mut _ = &mut amaster;
+    let mut aslave = 0;
+    let aslave_ptr: *mut _ = &mut aslave;
+
+    unsafe {
+        openpty(
+            amaster_ptr,
+            aslave_ptr,
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
     let (mut pipe_read, pipe_write) = std::io::pipe()?;
     let mut child = Command::new("ssh")
         .arg(format!("{user}@{host}"))
