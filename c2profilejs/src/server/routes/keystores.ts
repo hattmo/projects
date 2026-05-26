@@ -8,6 +8,7 @@ export default (keystoreModel: KeystoreModel) => {
 
   const route = Express.Router();
   const validator = new Validator({ allErrors: true });
+  const keystoresRoot = Path.resolve(__dirname, "../../../keystores");
 
   route.post("/", validator.validate({ body: postKeystoresScema }), async (req, res) => {
     try {
@@ -28,7 +29,19 @@ export default (keystoreModel: KeystoreModel) => {
   route.get("/:id", (req, res) => {
     if (req.query.download) {
       try {
-        res.download(Path.join(__dirname, `../../../keystores/${req.params.id}.jks`), `${req.params.id}.jks`);
+        const keystoreId = req.params.id;
+        if (!/^[A-Za-z0-9_-]+$/.test(keystoreId)) {
+          res.sendStatus(400);
+          return;
+        }
+
+        const downloadPath = Path.resolve(keystoresRoot, `${keystoreId}.jks`);
+        if (!(downloadPath === keystoresRoot || downloadPath.startsWith(`${keystoresRoot}${Path.sep}`))) {
+          res.sendStatus(403);
+          return;
+        }
+
+        res.download(downloadPath, `${keystoreId}.jks`);
       } catch (err) {
         res.sendStatus(500);
       }
